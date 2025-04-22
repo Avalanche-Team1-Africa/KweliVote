@@ -1,0 +1,20 @@
+// Prompt for Avalanche C-Chain development (Solidity + Ethers/Web3)
+
+// Target: Avalanche C-Chain using Solidity for smart contracts
+// Environment: Hardhat or Truffle, Solidity 0.8+, Ethers.js, IPFS optional
+
+// ✅ Best Practices
+- Always use `require()` and `revert` with meaningful error messages
+- Validate external calls with `onlyOwner`, `msg.sender`, etc.
+- Avoid writing to state unnecessarily to save gas
+- Add `events` for every state-changing function
+- Use OpenZeppelin for access control and safety
+- Include contract metadata (name, version, author)
+
+// 📦 Deployment Plan
+- Compile and deploy contract using Hardhat
+- Verify on SnowTrace (Avalanche explorer)
+// Setup frontend connection using Ethers.js:
+// 1. Import ABI and contract address
+// 2. Connect using Web3Provider and signer
+// 3. Call contract methods from UI
