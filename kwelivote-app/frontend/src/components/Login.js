@@ -5,6 +5,7 @@ const Login = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('');
+  const [error, setError] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -21,34 +22,36 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Here you would call the API endpoint for authentication
-    // For now, we'll simulate a successful login
-
-    // Store the authenticated user info
-    const userInfo = {
-      username,
-      role
-    };
-    
-    sessionStorage.setItem('userInfo', JSON.stringify(userInfo));
-    
-    // Redirect based on role
-    switch(role) {
-      case 'IEBC Constituency Election Coordinators (CECs)':
-        navigate('/register-keypersons');
-        break;
-      case 'Registration Clerk':
-        navigate('/register-voters');
-        break;
-      case 'Polling Clerks':
-        navigate('/view-data');
-        break;
-      case 'Presiding Officer (PO)':
-      case 'Deputy Presiding Officer (DPO)':
-        navigate('/results-count');
-        break;
-      default:
-        navigate('/');
+    // For testing purposes, accept any username with password "password"
+    if (password === 'password') {
+      // Store the authenticated user info
+      const userInfo = {
+        username,
+        role
+      };
+      
+      sessionStorage.setItem('userInfo', JSON.stringify(userInfo));
+      
+      // Redirect based on role
+      switch(role) {
+        case 'IEBC Constituency Election Coordinators (CECs)':
+          navigate('/register-keypersons');
+          break;
+        case 'Registration Clerk':
+          navigate('/register-voters');
+          break;
+        case 'Polling Clerks':
+          navigate('/view-data');
+          break;
+        case 'Presiding Officer (PO)':
+        case 'Deputy Presiding Officer (DPO)':
+          navigate('/results-count');
+          break;
+        default:
+          navigate('/');
+      }
+    } else {
+      setError('Invalid credentials. For testing, use any username with password "password"');
     }
   };
 
@@ -65,6 +68,12 @@ const Login = () => {
           <p className="font-medium">Role: {role}</p>
         </div>
       </div>
+      
+      {error && (
+        <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+          <span className="block sm:inline">{error}</span>
+        </div>
+      )}
       
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="space-y-2">
@@ -89,6 +98,7 @@ const Login = () => {
             required
             className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-kweli-accent focus:border-kweli-accent"
           />
+          <p className="text-sm text-gray-500 mt-1">For testing, use password: "password"</p>
         </div>
         
         <button 

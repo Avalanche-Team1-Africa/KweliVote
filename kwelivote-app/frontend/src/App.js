@@ -3,6 +3,13 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import './App.css';
 import Home from './components/Home';
 import Login from './components/Login';
+import ProtectedRoute from './components/ProtectedRoute';
+
+// Import role-specific components
+import KeypersonRegister from './components/keyperson/KeypersonRegister';
+import VoterRegister from './components/voter/VoterRegister';
+import DataViewer from './components/viewer/DataViewer';
+import ResultsCount from './components/results/ResultsCount';
 
 function App() {
   return (
@@ -22,6 +29,43 @@ function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
+            
+            {/* Protected routes for each role */}
+            <Route 
+              path="/register-keypersons" 
+              element={
+                <ProtectedRoute allowedRoles={['IEBC Constituency Election Coordinators (CECs)']}>
+                  <KeypersonRegister />
+                </ProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path="/register-voters" 
+              element={
+                <ProtectedRoute allowedRoles={['Registration Clerk']}>
+                  <VoterRegister />
+                </ProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path="/view-data" 
+              element={
+                <ProtectedRoute allowedRoles={['Polling Clerks']}>
+                  <DataViewer />
+                </ProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path="/results-count" 
+              element={
+                <ProtectedRoute allowedRoles={['Presiding Officer (PO)', 'Deputy Presiding Officer (DPO)']}>
+                  <ResultsCount />
+                </ProtectedRoute>
+              } 
+            />
           </Routes>
         </main>
       </div>
