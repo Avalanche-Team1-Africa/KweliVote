@@ -53,31 +53,48 @@ const Login = () => {
   };
 
   return (
-    <div className="login-container">
-      <h2>Login</h2>
-      <p>Login as: {role}</p>
-      <form onSubmit={handleSubmit}>
-        <div className="form-group">
-          <label htmlFor="username">Username:</label>
+    <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-8">
+      <div className="text-center mb-8">
+        <img 
+          src="/img/kwelivote_logo.png" 
+          alt="KweliVote Logo" 
+          className="h-24 mx-auto mb-4"
+        />
+        <h2 className="text-2xl font-bold text-kweli-dark mb-2">Login</h2>
+        <div className="inline-block bg-kweli-accent bg-opacity-20 text-kweli-secondary px-4 py-2 rounded-full">
+          <p className="font-medium">Role: {role}</p>
+        </div>
+      </div>
+      
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="space-y-2">
+          <label htmlFor="username" className="block text-sm font-medium text-gray-700">Username</label>
           <input
             type="text"
             id="username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             required
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-kweli-accent focus:border-kweli-accent"
           />
         </div>
-        <div className="form-group">
-          <label htmlFor="password">Password:</label>
+        
+        <div className="space-y-2">
+          <label htmlFor="password" className="block text-sm font-medium text-gray-700">Password</label>
           <input
             type="password"
             id="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-kweli-accent focus:border-kweli-accent"
           />
         </div>
-        <button type="submit" className="login-button">
+        
+        <button 
+          type="submit" 
+          className="w-full bg-kweli-primary hover:bg-kweli-secondary text-white font-bold py-3 px-6 rounded-md shadow transition-colors duration-200"
+        >
           Login
         </button>
       </form>
