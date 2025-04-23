@@ -5,7 +5,7 @@
 
 // ✅ Best Practices
 - Use functional components with hooks
-- Use context or Redux for state management
+- Use context for local state or Redux for global state management
 - Keep components atomic and reusable
 - Validate inputs before submitting blockchain transactions
 - Show transaction status (loading, success, error)
