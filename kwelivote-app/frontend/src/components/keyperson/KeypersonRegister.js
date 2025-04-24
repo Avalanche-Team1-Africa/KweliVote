@@ -28,6 +28,7 @@ const KeypersonRegister = () => {
   });
   
   const [isObserver, setIsObserver] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
   
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -55,97 +56,132 @@ const KeypersonRegister = () => {
   
   const nextStep = () => {
     setCurrentStep(currentStep + 1);
+    window.scrollTo(0, 0);
   };
   
   const prevStep = () => {
     setCurrentStep(currentStep - 1);
+    window.scrollTo(0, 0);
   };
   
   const handleSubmit = (e) => {
     e.preventDefault();
     // Here would be the API call to save the keyperson
     console.log('Keyperson data submitted:', formData);
-    // Reset form after submission
-    setFormData({
-      nationalid: '',
-      firstname: '',
-      middlename: '',
-      surname: '',
-      role: '',
-      politicalParty: '',
-      designatedPollingStation: '',
-      observerType: '',
-      stakeholder: '',
-      biometricData: null,
-      biometricImage: null,
-      username: '',
-      password: '',
-      confirmPassword: '',
-    });
-    setCurrentStep(1);
-    alert('Keyperson registered successfully!');
+    
+    // Show success message
+    setShowSuccess(true);
+    
+    // Reset form after submission with a delay
+    setTimeout(() => {
+      setFormData({
+        nationalid: '',
+        firstname: '',
+        middlename: '',
+        surname: '',
+        role: '',
+        politicalParty: '',
+        designatedPollingStation: '',
+        observerType: '',
+        stakeholder: '',
+        biometricData: null,
+        biometricImage: null,
+        username: '',
+        password: '',
+        confirmPassword: '',
+      });
+      setCurrentStep(1);
+      setShowSuccess(false);
+    }, 3000);
   };
   
+  const steps = [
+    { number: 1, name: 'Personal Details', status: currentStep >= 1 ? 'active' : 'inactive' },
+    { number: 2, name: 'Biometric Data', status: currentStep >= 2 ? 'active' : 'inactive' },
+    { number: 3, name: 'User Account', status: currentStep === 3 ? 'active' : 'inactive', hidden: isObserver }
+  ].filter(step => !step.hidden);
+  
   return (
-    <div className="max-w-3xl mx-auto bg-white rounded-lg shadow-lg p-8">
-      <h2 className="text-3xl font-bold text-kweli-dark mb-6 text-center">Register Keyperson</h2>
-      
-      <div className="mb-8">
-        <div className="flex justify-between items-center">
-          <div 
-            className={`w-1/3 text-center p-2 ${currentStep === 1 
-              ? 'bg-kweli-primary text-white font-bold rounded-l-lg' 
-              : 'bg-gray-200'}`}
-          >
-            1: Personal Details
+    <div className="max-w-3xl mx-auto animate-slide-up">
+      <div className="bg-white rounded-2xl shadow-soft-lg p-8 border border-gray-100">
+        <div className="mb-8 text-center">
+          <h2 className="text-2xl font-bold text-kweli-dark mb-3">Register Keyperson</h2>
+          <p className="text-gray-600">Complete the form to register a new keyperson</p>
+        </div>
+        
+        {showSuccess && (
+          <div className="mb-6 bg-green-50 border-l-4 border-green-500 text-green-700 p-4 rounded-md shadow-soft-sm animate-fade-in">
+            <div className="flex items-center">
+              <svg className="h-5 w-5 mr-2 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>Keyperson registered successfully!</span>
+            </div>
           </div>
-          <div 
-            className={`w-1/3 text-center p-2 ${currentStep === 2 
-              ? 'bg-kweli-primary text-white font-bold' 
-              : 'bg-gray-200'}`}
-          >
-            2: Biometric Data
-          </div>
-          <div 
-            className={`w-1/3 text-center p-2 ${currentStep === 3 && !isObserver 
-              ? 'bg-kweli-primary text-white font-bold rounded-r-lg' 
-              : 'bg-gray-200'}`}
-          >
-            3: User Account
+        )}
+        
+        <div className="mb-10">
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="h-1 w-full bg-gray-200 rounded"></div>
+            </div>
+            <div className="relative flex justify-between">
+              {steps.map((step, idx) => (
+                <div 
+                  key={step.number} 
+                  className="flex flex-col items-center"
+                >
+                  <div 
+                    className={`h-8 w-8 flex items-center justify-center rounded-full ${
+                      step.status === 'active' 
+                        ? 'bg-kweli-primary text-white'
+                        : 'bg-gray-200 text-gray-500'
+                    } font-medium transition-colors duration-200`}
+                  >
+                    {step.number}
+                  </div>
+                  <div className={`mt-2 text-xs font-medium ${
+                    step.status === 'active' ? 'text-kweli-primary' : 'text-gray-500'
+                  }`}>
+                    {step.name}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
+        
+        <form onSubmit={handleSubmit} className="transition-all duration-300">
+          {currentStep === 1 && (
+            <KeypersonStep1
+              formData={formData}
+              handleInputChange={handleInputChange}
+              nextStep={nextStep}
+              setIsObserver={setIsObserver}
+            />
+          )}
+          
+          {currentStep === 2 && (
+            <KeypersonStep2
+              formData={formData}
+              handleInputChange={handleInputChange}
+              handleFileChange={handleFileChange}
+              nextStep={nextStep}
+              prevStep={prevStep}
+              isObserver={isObserver}
+            />
+          )}
+          
+          {currentStep === 3 && !isObserver && (
+            <KeypersonStep3
+              formData={formData}
+              handleInputChange={handleInputChange}
+              prevStep={prevStep}
+              handleSubmit={handleSubmit}
+            />
+          )}
+        </form>
       </div>
-      
-      <form onSubmit={handleSubmit}>
-        {currentStep === 1 && (
-          <KeypersonStep1
-            formData={formData}
-            handleInputChange={handleInputChange}
-            nextStep={nextStep}
-            setIsObserver={setIsObserver}
-          />
-        )}
-        
-        {currentStep === 2 && (
-          <KeypersonStep2
-            formData={formData}
-            handleInputChange={handleInputChange}
-            handleFileChange={handleFileChange}
-            nextStep={nextStep}
-            prevStep={prevStep}
-            isObserver={isObserver}
-          />
-        )}
-        
-        {currentStep === 3 && !isObserver && (
-          <KeypersonStep3
-            formData={formData}
-            handleInputChange={handleInputChange}
-            prevStep={prevStep}
-            handleSubmit={handleSubmit}
-          />
-        )}
-      </form>
     </div>
   );
 };

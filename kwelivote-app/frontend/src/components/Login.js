@@ -6,6 +6,7 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -21,93 +22,149 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsLoading(true);
+    setError('');
     
-    // For testing purposes, accept any username with password "password"
-    if (password === 'password') {
-      // Store the authenticated user info
-      const userInfo = {
-        username,
-        role
-      };
-      
-      sessionStorage.setItem('userInfo', JSON.stringify(userInfo));
-      
-      // Redirect based on role
-      switch(role) {
-        case 'IEBC Constituency Election Coordinators (CECs)':
-          navigate('/register-keypersons');
-          break;
-        case 'Registration Clerk':
-          navigate('/register-voters');
-          break;
-        case 'Polling Clerks':
-          navigate('/view-data');
-          break;
-        case 'Presiding Officer (PO)':
-        case 'Deputy Presiding Officer (DPO)':
-          navigate('/results-count');
-          break;
-        default:
-          navigate('/');
+    // Simulate API call with a small delay
+    setTimeout(() => {
+      // For testing purposes, accept any username with password "password"
+      if (password === 'password') {
+        // Store the authenticated user info
+        const userInfo = {
+          username,
+          role
+        };
+        
+        sessionStorage.setItem('userInfo', JSON.stringify(userInfo));
+        
+        // Redirect based on role
+        switch(role) {
+          case 'IEBC Constituency Election Coordinators (CECs)':
+            navigate('/register-keypersons');
+            break;
+          case 'Registration Clerk':
+            navigate('/register-voters');
+            break;
+          case 'Polling Clerks':
+            navigate('/view-data');
+            break;
+          case 'Presiding Officer (PO)':
+          case 'Deputy Presiding Officer (DPO)':
+            navigate('/results-count');
+            break;
+          default:
+            navigate('/');
+        }
+      } else {
+        setError('Invalid credentials. For testing, use any username with password "password"');
+        setIsLoading(false);
       }
-    } else {
-      setError('Invalid credentials. For testing, use any username with password "password"');
-    }
+    }, 800);
   };
 
   return (
-    <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-8">
-      <div className="text-center mb-8">
-        <img 
-          src="/img/kwelivote_logo.png" 
-          alt="KweliVote Logo" 
-          className="h-24 mx-auto mb-4"
-        />
-        <h2 className="text-2xl font-bold text-kweli-dark mb-2">Login</h2>
-        <div className="inline-block bg-kweli-accent bg-opacity-20 text-kweli-secondary px-4 py-2 rounded-full">
-          <p className="font-medium">Role: {role}</p>
+    <div className="max-w-md mx-auto animate-slide-up">
+      <div className="bg-white rounded-2xl shadow-soft-lg p-8 border border-gray-100">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-kweli-light rounded-full mb-6 shadow-soft-sm">
+            <img 
+              src="/img/kwelivote_logo.png" 
+              alt="KweliVote Logo" 
+              className="h-14"
+            />
+          </div>
+          <h2 className="text-2xl font-bold text-kweli-dark mb-3">Welcome Back</h2>
+          <div className="inline-block bg-gradient-to-r from-kweli-accent/20 to-kweli-primary/10 text-kweli-secondary px-4 py-2 rounded-full">
+            <p className="font-medium">{role}</p>
+          </div>
+        </div>
+        
+        {error && (
+          <div className="mb-6 bg-red-50 border-l-4 border-red-400 text-red-700 p-4 rounded-md shadow-soft-sm animate-fade-in" role="alert">
+            <div className="flex items-center">
+              <svg className="h-5 w-5 mr-2 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>{error}</span>
+            </div>
+          </div>
+        )}
+        
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-2">
+            <label htmlFor="username" className="block text-sm font-medium text-gray-700">Username</label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <input
+                type="text"
+                id="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+                className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-kweli-primary/50 focus:border-kweli-primary/50 transition-colors duration-200"
+                placeholder="Enter your username"
+              />
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700">Password</label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <input
+                type="password"
+                id="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-kweli-primary/50 focus:border-kweli-primary/50 transition-colors duration-200"
+                placeholder="Enter your password"
+              />
+            </div>
+            <p className="text-sm text-gray-500 mt-1">For testing, use password: "password"</p>
+          </div>
+          
+          <button 
+            type="submit" 
+            className={`w-full flex items-center justify-center bg-kweli-primary hover:bg-kweli-secondary text-white font-medium py-3 px-6 rounded-lg shadow-soft transition-all duration-300 ${isLoading ? 'opacity-80' : ''}`}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <>
+                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Logging in...
+              </>
+            ) : (
+              <>
+                Sign In
+                <svg className="ml-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </>
+            )}
+          </button>
+        </form>
+        
+        <div className="mt-6 text-center text-sm text-gray-500">
+          <button 
+            onClick={() => navigate('/')}
+            className="text-kweli-secondary hover:text-kweli-primary transition-colors duration-200"
+          >
+            Back to Home
+          </button>
         </div>
       </div>
-      
-      {error && (
-        <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
-          <span className="block sm:inline">{error}</span>
-        </div>
-      )}
-      
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="space-y-2">
-          <label htmlFor="username" className="block text-sm font-medium text-gray-700">Username</label>
-          <input
-            type="text"
-            id="username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            required
-            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-kweli-accent focus:border-kweli-accent"
-          />
-        </div>
-        
-        <div className="space-y-2">
-          <label htmlFor="password" className="block text-sm font-medium text-gray-700">Password</label>
-          <input
-            type="password"
-            id="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-kweli-accent focus:border-kweli-accent"
-          />
-          <p className="text-sm text-gray-500 mt-1">For testing, use password: "password"</p>
-        </div>
-        
-        <button 
-          type="submit" 
-          className="w-full bg-kweli-primary hover:bg-kweli-secondary text-white font-bold py-3 px-6 rounded-md shadow transition-colors duration-200"
-        >
-          Login
-        </button>
-      </form>
     </div>
   );
 };
