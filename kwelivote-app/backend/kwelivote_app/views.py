@@ -21,14 +21,20 @@ class KeyPersonTokenObtainPairSerializer(TokenObtainPairSerializer):
     def get_token(cls, user):
         token = super().get_token(user)
         
-        # Add custom claims for KeyPerson
+        # Add custom claims
         try:
-            keyperson = user.keyperson
-            token['nationalid'] = keyperson.nationalid
-            token['role'] = keyperson.role
-            token['name'] = f"{keyperson.firstname} {keyperson.surname}"
-        except:
-            pass
+            if hasattr(user, 'keyperson'):
+                keyperson = user.keyperson
+                token['nationalid'] = keyperson.nationalid
+                token['role'] = keyperson.role
+                token['name'] = f"{keyperson.firstname} {keyperson.surname}"
+            elif hasattr(user, 'username'):
+                # For admin users or other users not linked to keyperson
+                token['username'] = user.username
+                token['is_staff'] = user.is_staff
+                token['is_superuser'] = user.is_superuser
+        except Exception as e:
+            print(f"Error adding custom claims to token: {e}")
             
         return token
     
@@ -39,12 +45,21 @@ class KeyPersonTokenObtainPairSerializer(TokenObtainPairSerializer):
         # Add extra responses here
         user = self.user
         try:
-            keyperson = user.keyperson
-            data['nationalid'] = keyperson.nationalid
-            data['role'] = keyperson.role
-            data['name'] = f"{keyperson.firstname} {keyperson.surname}"
-        except:
-            pass
+            if hasattr(user, 'keyperson'):
+                keyperson = user.keyperson
+                data['nationalid'] = keyperson.nationalid
+                data['role'] = keyperson.role
+                data['name'] = f"{keyperson.firstname} {keyperson.surname}"
+            elif hasattr(user, 'username'):
+                # For admin users or other users not linked to keyperson
+                data['username'] = user.username
+                if hasattr(user, 'is_staff'):
+                    data['is_staff'] = user.is_staff
+                    data['is_superuser'] = user.is_superuser
+                    # Provide a role for admin users so frontend routing works
+                    data['role'] = 'Administrator' if user.is_superuser else 'Staff'
+        except Exception as e:
+            print(f"Error adding custom data to response: {e}")
             
         return data
 

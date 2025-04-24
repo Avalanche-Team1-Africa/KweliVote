@@ -2,6 +2,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.utils.translation import gettext_lazy as _
 from rest_framework import authentication, exceptions
 from django.conf import settings
+from django.contrib.auth.models import User
 from .models import KeyPerson
 
 class CustomJWTAuthentication(JWTAuthentication):
@@ -18,9 +19,8 @@ class CustomJWTAuthentication(JWTAuthentication):
             raise exceptions.AuthenticationFailed(_('Token contained no recognizable user identification'))
 
         try:
-            # Since we no longer have User model, authenticate using KeyPerson
-            keyperson = KeyPerson.objects.get(nationalid=user_id)
-            # We're returning the KeyPerson as the authenticated user
-            return keyperson
-        except KeyPerson.DoesNotExist:
+            # Use Django's standard User model for authentication
+            user = User.objects.get(pk=user_id)
+            return user
+        except User.DoesNotExist:
             raise exceptions.AuthenticationFailed(_('User not found'))

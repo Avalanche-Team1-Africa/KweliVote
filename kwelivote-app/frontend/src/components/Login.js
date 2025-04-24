@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { authAPI } from '../utils/api';
 
 const Login = () => {
   const [username, setUsername] = useState('');
@@ -25,41 +26,51 @@ const Login = () => {
     setIsLoading(true);
     setError('');
     
-    // Simulate API call with a small delay
-    setTimeout(() => {
-      // For testing purposes, accept any username with password "password"
-      if (password === 'password') {
-        // Store the authenticated user info
-        const userInfo = {
-          username,
-          role
-        };
+    try {
+      // Call the login API
+      const response = await authAPI.login(username, password);
+      
+      // Extract tokens and any user data from response
+      const { access, refresh, role: userRole, nationalid, name } = response;
+      
+      // Use the role from the response if available, otherwise use the selected role
+      const effectiveRole = userRole || role;
+      
+      // Store the authenticated user info
+      const userInfo = {
+        username,
+        token: access,
+        refreshToken: refresh,
+        role: effectiveRole,
+        nationalId: nationalid,
+        name,
+      };
         
-        sessionStorage.setItem('userInfo', JSON.stringify(userInfo));
+      sessionStorage.setItem('userInfo', JSON.stringify(userInfo));
         
-        // Redirect based on role
-        switch(role) {
-          case 'IEBC Constituency Election Coordinators (CECs)':
-            navigate('/register-keypersons');
-            break;
-          case 'Registration Clerk':
-            navigate('/register-voters');
-            break;
-          case 'Polling Clerks':
-            navigate('/view-data');
-            break;
-          case 'Presiding Officer (PO)':
-          case 'Deputy Presiding Officer (DPO)':
-            navigate('/results-count');
-            break;
-          default:
-            navigate('/');
-        }
-      } else {
-        setError('Invalid credentials. For testing, use any username with password "password"');
-        setIsLoading(false);
+      // Redirect based on role
+      switch(effectiveRole) {
+        case 'IEBC Constituency Election Coordinators (CECs)':
+          navigate('/register-keypersons');
+          break;
+        case 'Registration Clerk':
+          navigate('/register-voters');
+          break;
+        case 'Polling Clerks':
+          navigate('/view-data');
+          break;
+        case 'Presiding Officer (PO)':
+        case 'Deputy Presiding Officer (DPO)':
+          navigate('/results-count');
+          break;
+        default:
+          navigate('/');
       }
-    }, 800);
+    } catch (error) {
+      console.error('Login error:', error);
+      setError(error.message || 'Failed to login. Please check your credentials.');
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -129,7 +140,6 @@ const Login = () => {
                 placeholder="Enter your password"
               />
             </div>
-            <p className="text-sm text-gray-500 mt-1">For testing, use password: "password"</p>
           </div>
           
           <button 
