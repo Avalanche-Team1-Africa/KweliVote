@@ -1,10 +1,13 @@
 from django.db import models
 from django.utils import timezone
+from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 
 # ------------------------
 # KeyPersons Collection
 # ------------------------
 class KeyPerson(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, null=True, blank=True, related_name='keyperson')
     nationalid = models.CharField(primary_key=True, max_length=20)
     firstname = models.CharField(max_length=100)
     middlename = models.CharField(max_length=100, blank=True, null=True)
@@ -37,6 +40,23 @@ class KeyPerson(models.Model):
 
     def __str__(self):
         return f"{self.role} - {self.firstname} {self.surname}"
+    
+    def clean(self):
+        # Validate that non-Observer KeyPersons have user accounts
+        if self.role != "Observers" and not self.user:
+            raise ValidationError("All KeyPersons except Observers must have a user account")
+        
+        # Validate that Observers have observer_type set
+        if self.role == "Observers" and not self.observer_type:
+            raise ValidationError("Observers must have an observer type specified")
+        
+        # Validate that Party Agents have political_party set
+        if self.role == "Party Agents" and not self.political_party:
+            raise ValidationError("Party Agents must have a political party specified")
+    
+    def save(self, *args, **kwargs):
+        self.clean()  # Run validation before saving
+        super().save(*args, **kwargs)
 
 
 # ------------------------

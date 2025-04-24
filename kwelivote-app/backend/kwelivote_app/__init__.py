@@ -1,0 +1,1 @@
+default_app_config = 'kwelivote_app.apps.KwelivoteAppConfig'
