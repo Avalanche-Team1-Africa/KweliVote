@@ -40,19 +40,6 @@ class KeyPerson(models.Model):
 
 
 # ------------------------
-# Users Collection
-# ------------------------
-class User(models.Model):
-    username = models.CharField(max_length=100)
-    nationalid = models.ForeignKey(KeyPerson, on_delete=models.CASCADE)
-    password = models.CharField(max_length=100)
-    is_active = models.BooleanField(default=True)
-
-    def __str__(self):
-        return self.username
-
-
-# ------------------------
 # Voters Collection
 # ------------------------
 class Voter(models.Model):

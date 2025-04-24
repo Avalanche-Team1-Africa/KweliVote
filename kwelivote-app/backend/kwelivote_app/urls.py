@@ -19,7 +19,6 @@ from django.urls import path, include
 from rest_framework import routers
 from .views import (
     api_root, 
-    UserViewSet, 
     VoterViewSet, 
     KeyPersonViewSet, 
     CandidateViewSet,
@@ -28,7 +27,6 @@ from .views import (
 
 # Set up DRF router
 router = routers.DefaultRouter()
-router.register(r'users', UserViewSet, basename='user')
 router.register(r'voters', VoterViewSet, basename='voter')
 router.register(r'keypersons', KeyPersonViewSet, basename='keyperson')
 router.register(r'candidates', CandidateViewSet, basename='candidate')

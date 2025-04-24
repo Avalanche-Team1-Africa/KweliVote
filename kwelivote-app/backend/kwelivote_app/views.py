@@ -2,9 +2,8 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.reverse import reverse
-from .models import User, Voter, KeyPerson, Candidate, ResultsCount
+from .models import Voter, KeyPerson, Candidate, ResultsCount
 from .serializers import (
-    UserSerializer, 
     VoterSerializer, 
     KeyPersonSerializer, 
     CandidateSerializer,
@@ -17,20 +16,11 @@ def api_root(request, format=None):
     API Root endpoint providing links to all available endpoints
     """
     return Response({
-        'users': reverse('user-list', request=request, format=format),
         'voters': reverse('voter-list', request=request, format=format),
         'keypersons': reverse('keyperson-list', request=request, format=format),
         'candidates': reverse('candidate-list', request=request, format=format),
         'resultscount': reverse('resultscount-list', request=request, format=format),
     })
-
-
-class UserViewSet(viewsets.ModelViewSet):
-    """
-    API endpoint for managing users
-    """
-    queryset = User.objects.all().order_by('username')
-    serializer_class = UserSerializer
 
 
 class VoterViewSet(viewsets.ModelViewSet):

@@ -1,30 +1,10 @@
 from rest_framework import serializers
-from .models import User, Voter, KeyPerson, Candidate, ResultsCount
+from .models import Voter, KeyPerson, Candidate, ResultsCount
 
 class KeyPersonSerializer(serializers.ModelSerializer):
     class Meta:
         model = KeyPerson
         fields = '__all__'
-
-
-class UserSerializer(serializers.ModelSerializer):
-    keyperson_details = serializers.SerializerMethodField()
-
-    class Meta:
-        model = User
-        fields = ['username', 'nationalid', 'is_active', 'keyperson_details']
-        extra_kwargs = {
-            'password': {'write_only': True}
-        }
-    
-    def get_keyperson_details(self, obj):
-        keyperson = obj.nationalid
-        return {
-            'firstname': keyperson.firstname,
-            'surname': keyperson.surname,
-            'role': keyperson.role,
-            'did': keyperson.did
-        }
 
 
 class VoterSerializer(serializers.ModelSerializer):
