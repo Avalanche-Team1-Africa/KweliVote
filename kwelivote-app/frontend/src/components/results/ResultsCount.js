@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { resultsAPI, candidateAPI } from '../../utils/api';
 
 const ResultsCount = () => {
   const [formData, setFormData] = useState({
@@ -9,57 +10,12 @@ const ResultsCount = () => {
     observer: '',
   });
   
-  const [resultsList, setResultsList] = useState([
-    {
-      resultscount_id: "RES1001",
-      candidate_details: {
-        firstname: "Diana",
-        surname: "Kenya",
-        candidate_type: "President",
-        political_party: "Party A"
-      },
-      polling_station: "Station A",
-      votes: 120,
-      created_by: "officer1",
-      created_datetime: "2025-04-23T14:57:21.596405Z",
-      candidate: "C1001",
-      presiding_officer: "100002",
-      deputy_presiding_officer: "100003",
-      party_agent: "100005",
-      observer: "100006"
-    },
-    {
-      resultscount_id: "RES1002",
-      candidate_details: {
-        firstname: "Eli",
-        surname: "Wanjiku",
-        candidate_type: "President",
-        political_party: "Party B"
-      },
-      polling_station: "Station A",
-      votes: 85,
-      created_by: "officer1",
-      created_datetime: "2025-04-23T14:57:21.596565Z",
-      candidate: "C1002",
-      presiding_officer: "100002",
-      deputy_presiding_officer: "100003",
-      party_agent: "100005",
-      observer: "100006"
-    }
-  ]);
-  
+  const [resultsList, setResultsList] = useState([]);
+  const [candidates, setCandidates] = useState([]);
   const [showSuccessAlert, setShowSuccessAlert] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  // Sample data for dropdown options
-  const candidates = [
-    { id: 'C1001', name: 'Diana Kenya', type: 'President', party: 'Party A' },
-    { id: 'C1002', name: 'Eli Wanjiku', type: 'President', party: 'Party B' },
-    { id: 'C1003', name: 'Faith Omari', type: 'Governor', party: 'Party A' },
-    { id: 'C1004', name: 'George Mwangi', type: 'Governor', party: 'Party B' },
-    { id: 'C1005', name: 'Helen Njeri', type: 'Member of National Assembly (MP)', party: 'Party C' },
-    { id: 'C1006', name: 'Ian Ochieng', type: 'Member of National Assembly (MP)', party: 'Party D' },
-  ];
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
   
   const pollingStations = [
     'Station A',
@@ -80,6 +36,26 @@ const ResultsCount = () => {
     { id: '100007', name: 'Robert Miller' },
   ];
   
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        const candidatesData = await candidateAPI.getCandidates();
+        setCandidates(candidatesData);
+        
+        const resultsData = await resultsAPI.getResults();
+        setResultsList(resultsData);
+      } catch (err) {
+        console.error('Error fetching data:', err);
+        setError('Failed to load data. Please try refreshing the page.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, []);
+  
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData({
@@ -88,42 +64,27 @@ const ResultsCount = () => {
     });
   };
   
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setError('');
     
-    // Simulate API call
-    setTimeout(() => {
-      // Get the selected candidate details
-      const selectedCandidate = candidates.find(c => c.id === formData.candidate);
-      
-      // Create new result entry
-      const newResult = {
-        resultscount_id: `RES${Math.floor(1000 + Math.random() * 9000)}`,
-        candidate_details: {
-          firstname: selectedCandidate.name.split(' ')[0],
-          surname: selectedCandidate.name.split(' ')[1],
-          candidate_type: selectedCandidate.type,
-          political_party: selectedCandidate.party
-        },
+    try {
+      const resultData = {
+        candidate: formData.candidate,
         polling_station: formData.pollingStation,
         votes: parseInt(formData.votes),
-        created_by: "officer1",
-        created_datetime: new Date().toISOString(),
-        candidate: formData.candidate,
-        presiding_officer: "100002",
-        deputy_presiding_officer: "100003",
         party_agent: formData.partyAgent,
         observer: formData.observer
       };
+
+      const createdResult = await resultsAPI.createResult(resultData);
+      console.log('Result created:', createdResult);
       
-      // Add to the results list
-      setResultsList([newResult, ...resultsList]);
+      setResultsList([createdResult, ...resultsList]);
       
-      // Show success alert
       setShowSuccessAlert(true);
       
-      // Reset form
       setFormData({
         candidate: '',
         pollingStation: '',
@@ -132,24 +93,33 @@ const ResultsCount = () => {
         observer: '',
       });
       
-      setIsSubmitting(false);
-      
-      // Hide success alert after 3 seconds
       setTimeout(() => {
         setShowSuccessAlert(false);
       }, 3000);
-    }, 800);
+    } catch (err) {
+      console.error('Error creating result:', err);
+      setError(err.message || 'Failed to save results. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  // Calculate total votes by party
   const votesByParty = resultsList.reduce((acc, result) => {
-    const party = result.candidate_details.political_party;
+    const party = result.candidate_details?.political_party || 'Unknown';
     if (!acc[party]) {
       acc[party] = 0;
     }
     acc[party] += result.votes;
     return acc;
   }, {});
+
+  if (isLoading) {
+    return (
+      <div className="max-w-6xl mx-auto p-8 flex justify-center items-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-kweli-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-6xl mx-auto animate-slide-up">
@@ -159,13 +129,24 @@ const ResultsCount = () => {
           <p className="text-gray-600">Track and manage election results across polling stations</p>
         </div>
         
+        {error && (
+          <div className="mb-6 bg-red-50 border-l-4 border-red-400 text-red-700 p-4 rounded-md shadow-soft-sm animate-fade-in" role="alert">
+            <div className="flex items-center">
+              <svg className="h-5 w-5 mr-2 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>{error}</span>
+            </div>
+          </div>
+        )}
+        
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-1">
             <div className="bg-gradient-to-b from-gray-50 to-white rounded-xl shadow-soft p-6 border border-gray-100">
               <div className="flex items-center mb-4">
                 <div className="h-8 w-8 bg-kweli-primary/10 rounded-full flex items-center justify-center mr-3">
                   <svg className="h-4 w-4 text-kweli-primary" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
+                    <path d="M3 4a1 0 011-1h12a1 0 011 1v2a1 0 01-1 1H4a1 0 01-1-1V4zM3 10a1 0 011-1h6a1 0 011 1v6a1 0 01-1 1H4a1 0 01-1-1v-6zM14 9a1 0 00-1 1v6a1 0 001 1h2a1 0 001-1v-6a1 0 00-1-1h-2z" />
                   </svg>
                 </div>
                 <h3 className="text-lg font-bold text-kweli-dark">Add New Results</h3>

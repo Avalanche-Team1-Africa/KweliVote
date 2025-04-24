@@ -23,14 +23,29 @@ function App() {
         <header className="bg-white shadow-soft-md sticky top-0 z-10">
           <div className="container mx-auto px-4 py-3">
             <div className="flex items-center justify-between">
+              {/* Left - Logo & name linking to homepage */}
               <div className="flex items-center">
-                <img 
-                  src="/img/kwelivote_logo.png" 
-                  alt="KweliVote Logo" 
-                  className="h-12 mr-4"
-                />
-                <h1 className="text-2xl font-bold text-kweli-dark">KweliVote</h1>
+                <Link to="/" className="flex items-center">
+                  <img 
+                    src="/img/kwelivote_logo.png" 
+                    alt="KweliVote Logo" 
+                    className="h-12 mr-4"
+                  />
+                  <h1 className="text-2xl font-bold text-kweli-dark">KweliVote</h1>
+                </Link>
               </div>
+              
+              {/* Center - User info: name and role */}
+              {isLoggedIn && (
+                <div className="hidden md:flex flex-col items-center justify-center">
+                  <span className="font-semibold text-kweli-dark text-lg">
+                    {userInfo.name || userInfo.username}
+                  </span>
+                  <span className="text-sm text-kweli-secondary">
+                    {userInfo.role || "User"}
+                  </span>
+                </div>
+              )}
               
               {/* Mobile menu button */}
               {isLoggedIn && (
@@ -44,27 +59,10 @@ function App() {
                 </button>
               )}
               
-              {/* Desktop navigation */}
+              {/* Right - Desktop navigation with only logout */}
               {isLoggedIn && (
                 <nav className="hidden md:block">
-                  <ul className="flex space-x-6">
-                    <li>
-                      <span className="text-kweli-dark font-medium">
-                        Welcome, {userInfo.username}
-                      </span>
-                    </li>
-                    <li>
-                      <Link 
-                        to="/" 
-                        className="text-kweli-secondary hover:text-kweli-primary font-medium transition-colors duration-200"
-                      >
-                        Home
-                      </Link>
-                    </li>
-                    <li>
-                      <Logout />
-                    </li>
-                  </ul>
+                  <Logout />
                 </nav>
               )}
             </div>
@@ -73,17 +71,13 @@ function App() {
             {menuOpen && isLoggedIn && (
               <nav className="md:hidden mt-4 pb-2 animate-fade-in">
                 <ul className="space-y-3">
-                  <li className="text-kweli-dark font-medium">
-                    Welcome, {userInfo.username}
-                  </li>
-                  <li>
-                    <Link 
-                      to="/" 
-                      className="block text-kweli-secondary hover:text-kweli-primary font-medium transition-colors duration-200"
-                      onClick={() => setMenuOpen(false)}
-                    >
-                      Home
-                    </Link>
+                  <li className="flex flex-col">
+                    <span className="font-semibold text-kweli-dark">
+                      {userInfo.name || userInfo.username}
+                    </span>
+                    <span className="text-sm text-kweli-secondary">
+                      {userInfo.role || "User"}
+                    </span>
                   </li>
                   <li onClick={() => setMenuOpen(false)}>
                     <Logout />

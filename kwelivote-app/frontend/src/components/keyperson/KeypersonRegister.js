@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import KeypersonStep1 from './KeypersonStep1';
 import KeypersonStep2 from './KeypersonStep2';
 import KeypersonStep3 from './KeypersonStep3';
+import { keypersonAPI } from '../../utils/api';
 
 const KeypersonRegister = () => {
   const [currentStep, setCurrentStep] = useState(1);
@@ -29,6 +30,8 @@ const KeypersonRegister = () => {
   
   const [isObserver, setIsObserver] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
   
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -64,35 +67,73 @@ const KeypersonRegister = () => {
     window.scrollTo(0, 0);
   };
   
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Here would be the API call to save the keyperson
-    console.log('Keyperson data submitted:', formData);
+    setIsSubmitting(true);
+    setError('');
     
-    // Show success message
-    setShowSuccess(true);
-    
-    // Reset form after submission with a delay
-    setTimeout(() => {
-      setFormData({
-        nationalid: '',
-        firstname: '',
-        middlename: '',
-        surname: '',
-        role: '',
-        politicalParty: '',
-        designatedPollingStation: '',
-        observerType: '',
-        stakeholder: '',
-        biometricData: null,
-        biometricImage: null,
-        username: '',
-        password: '',
-        confirmPassword: '',
-      });
-      setCurrentStep(1);
-      setShowSuccess(false);
-    }, 3000);
+    try {
+      // Prepare keyperson data for API
+      const keypersonData = {
+        national_id: formData.nationalid,
+        first_name: formData.firstname,
+        middle_name: formData.middlename,
+        surname: formData.surname,
+        role: formData.role,
+        political_party: formData.politicalParty || null,
+        designated_polling_station: formData.designatedPollingStation,
+        observer_type: formData.observerType || null,
+        stakeholder: formData.stakeholder || null
+      };
+
+      // First create the keyperson
+      const createdKeyperson = await keypersonAPI.createKeyperson(keypersonData);
+      console.log('Keyperson created:', createdKeyperson);
+
+      // If this is not an observer and we need to create a user account
+      if (!isObserver && formData.username && formData.password) {
+        // Create user account linked to the keyperson
+        const userData = {
+          username: formData.username,
+          password: formData.password,
+          national_id: formData.nationalid, // Link to the keyperson by national ID
+          role: formData.role
+        };
+        
+        await keypersonAPI.createKeypersonUser(userData);
+        console.log('User account created for keyperson');
+      }
+      
+      // Show success message
+      setShowSuccess(true);
+      
+      // Reset form after successful submission
+      setTimeout(() => {
+        setFormData({
+          nationalid: '',
+          firstname: '',
+          middlename: '',
+          surname: '',
+          role: '',
+          politicalParty: '',
+          designatedPollingStation: '',
+          observerType: '',
+          stakeholder: '',
+          biometricData: null,
+          biometricImage: null,
+          username: '',
+          password: '',
+          confirmPassword: '',
+        });
+        setCurrentStep(1);
+        setShowSuccess(false);
+      }, 3000);
+    } catch (error) {
+      console.error('Error registering keyperson:', error);
+      setError(error.message || 'Failed to register keyperson. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
   
   const steps = [
@@ -116,6 +157,17 @@ const KeypersonRegister = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <span>Keyperson registered successfully!</span>
+            </div>
+          </div>
+        )}
+        
+        {error && (
+          <div className="mb-6 bg-red-50 border-l-4 border-red-400 text-red-700 p-4 rounded-md shadow-soft-sm animate-fade-in" role="alert">
+            <div className="flex items-center">
+              <svg className="h-5 w-5 mr-2 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>{error}</span>
             </div>
           </div>
         )}
@@ -178,6 +230,7 @@ const KeypersonRegister = () => {
               handleInputChange={handleInputChange}
               prevStep={prevStep}
               handleSubmit={handleSubmit}
+              isSubmitting={isSubmitting}
             />
           )}
         </form>

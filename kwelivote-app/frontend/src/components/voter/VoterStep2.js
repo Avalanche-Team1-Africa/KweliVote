@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 
-const VoterStep2 = ({ formData, handleFileChange, prevStep, handleSubmit }) => {
-  const [isSubmitting, setIsSubmitting] = useState(false);
+const VoterStep2 = ({ formData, handleFileChange, prevStep, handleSubmit, isSubmitting = false }) => {
   const [dragActive, setDragActive] = useState(false);
   
   const handlePrev = (e) => {
@@ -11,13 +10,7 @@ const VoterStep2 = ({ formData, handleFileChange, prevStep, handleSubmit }) => {
   
   const handleFormSubmit = (e) => {
     e.preventDefault();
-    setIsSubmitting(true);
-    
-    // Simulate API delay
-    setTimeout(() => {
-      handleSubmit(e);
-      setIsSubmitting(false);
-    }, 800);
+    handleSubmit(e);
   };
   
   const handleDrag = (e) => {
@@ -148,6 +141,7 @@ const VoterStep2 = ({ formData, handleFileChange, prevStep, handleSubmit }) => {
         <button
           type="button"
           onClick={handlePrev}
+          disabled={isSubmitting}
           className="flex items-center text-gray-700 font-medium py-2.5 px-6 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors duration-200"
         >
           <svg className="mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">

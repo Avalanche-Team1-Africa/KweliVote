@@ -1,104 +1,57 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { voterAPI, keypersonAPI } from '../../utils/api';
 
 const DataViewer = () => {
   const [activeTab, setActiveTab] = useState('voters');
   const [searchTerm, setSearchTerm] = useState('');
+  const [voters, setVoters] = useState([]);
+  const [keypersons, setKeypersons] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
   
-  // Placeholder data for demonstration
-  const voters = [
-    {
-      nationalid: "V1001",
-      firstname: "Alice",
-      middlename: "L",
-      surname: "Johnson",
-      did: "did:example:V1001",
-      designated_polling_station: "Station A",
-      created_by: "clerk1",
-      created_datetime: "2025-04-23T14:57:21.496440Z"
-    },
-    {
-      nationalid: "V1002",
-      firstname: "Bob",
-      middlename: "M",
-      surname: "Smith",
-      did: "did:example:V1002",
-      designated_polling_station: "Station B",
-      created_by: "clerk1",
-      created_datetime: "2025-04-23T14:57:21.496505Z"
-    },
-    {
-      nationalid: "V1003",
-      firstname: "Charlie",
-      middlename: "N",
-      surname: "Ngugi",
-      did: "did:example:V1003",
-      designated_polling_station: "Station C",
-      created_by: "clerk1",
-      created_datetime: "2025-04-23T14:57:21.496515Z"
-    }
-  ];
-  
-  const keypersons = [
-    {
-      nationalid: "100001",
-      firstname: "John",
-      middlename: "M",
-      surname: "Doe",
-      role: "Registration Clerk",
-      did: "did:example:100001",
-      political_party: null,
-      designated_polling_station: "Station A",
-      observer_type: null,
-      stakeholder: null,
-      created_by: "admin",
-      created_datetime: "2025-04-23T14:57:21.418388Z"
-    },
-    {
-      nationalid: "100002",
-      firstname: "Mary",
-      middlename: "N",
-      surname: "Smith",
-      role: "Presiding Officer (PO)",
-      did: "did:example:100002",
-      political_party: null,
-      designated_polling_station: "Station B",
-      observer_type: null,
-      stakeholder: null,
-      created_by: "admin",
-      created_datetime: "2025-04-23T14:57:21.418587Z"
-    },
-    {
-      nationalid: "100005",
-      firstname: "Michael",
-      middlename: "Q",
-      surname: "Williams",
-      role: "Party Agents",
-      did: "did:example:100005",
-      political_party: "Party A",
-      designated_polling_station: "Station E",
-      observer_type: null,
-      stakeholder: null,
-      created_by: "admin",
-      created_datetime: "2025-04-23T14:57:21.418675Z"
-    }
-  ];
+  // Fetch data when component mounts
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      setError('');
+      
+      try {
+        if (activeTab === 'voters') {
+          const votersData = await voterAPI.getVoters();
+          setVoters(votersData);
+        } else if (activeTab === 'keypersons') {
+          const keypersonsData = await keypersonAPI.getKeypersons();
+          setKeypersons(keypersonsData);
+        }
+      } catch (err) {
+        console.error(`Error fetching ${activeTab}:`, err);
+        setError(`Failed to load ${activeTab}. Please try again later.`);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, [activeTab]); // Re-fetch when tab changes
 
   const filteredVoters = voters.filter(voter => {
-    const fullName = `${voter.firstname} ${voter.middlename || ''} ${voter.surname}`.toLowerCase();
+    if (!voter) return false;
+    const fullName = `${voter.firstname || ''} ${voter.middlename || ''} ${voter.surname || ''}`.toLowerCase();
     return (
       fullName.includes(searchTerm.toLowerCase()) || 
-      voter.nationalid.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      voter.designated_polling_station.toLowerCase().includes(searchTerm.toLowerCase())
+      (voter.nationalid && voter.nationalid.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (voter.designated_polling_station && voter.designated_polling_station.toLowerCase().includes(searchTerm.toLowerCase()))
     );
   });
 
   const filteredKeypersons = keypersons.filter(person => {
-    const fullName = `${person.firstname} ${person.middlename || ''} ${person.surname}`.toLowerCase();
+    if (!person) return false;
+    const fullName = `${person.firstname || ''} ${person.middlename || ''} ${person.surname || ''}`.toLowerCase();
     return (
       fullName.includes(searchTerm.toLowerCase()) || 
-      person.nationalid.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (person.nationalid && person.nationalid.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (person.role && person.role.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      person.designated_polling_station.toLowerCase().includes(searchTerm.toLowerCase())
+      (person.designated_polling_station && person.designated_polling_station.toLowerCase().includes(searchTerm.toLowerCase()))
     );
   });
 
@@ -109,6 +62,17 @@ const DataViewer = () => {
           <h2 className="text-2xl font-bold text-kweli-dark mb-3">View Election Data</h2>
           <p className="text-gray-600">Access and review election data securely</p>
         </div>
+        
+        {error && (
+          <div className="mb-6 bg-red-50 border-l-4 border-red-400 text-red-700 p-4 rounded-md shadow-soft-sm animate-fade-in" role="alert">
+            <div className="flex items-center">
+              <svg className="h-5 w-5 mr-2 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>{error}</span>
+            </div>
+          </div>
+        )}
         
         <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
           <div className="flex w-full md:w-auto space-x-1">
@@ -157,158 +121,166 @@ const DataViewer = () => {
         </div>
 
         <div className="bg-gray-50 p-4 mb-6 rounded-lg shadow-soft-inner">
-          {activeTab === 'voters' && (
-            <div className="animate-fade-in">
-              <div className="flex items-center mb-4">
-                <div className="h-8 w-8 bg-kweli-primary/10 rounded-full flex items-center justify-center mr-3">
-                  <svg className="h-4 w-4 text-kweli-primary" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-kweli-dark">Registered Voters</h3>
-                  <p className="text-sm text-gray-600">Total: {filteredVoters.length} voters</p>
-                </div>
-              </div>
-
-              {filteredVoters.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <div className="inline-block min-w-full align-middle">
-                    <div className="overflow-hidden border border-gray-200 rounded-lg shadow-soft-sm">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-100">
-                          <tr>
-                            <th scope="col" className="px-6 py-3.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                              National ID
-                            </th>
-                            <th scope="col" className="px-6 py-3.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                              Name
-                            </th>
-                            <th scope="col" className="px-6 py-3.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                              DID
-                            </th>
-                            <th scope="col" className="px-6 py-3.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                              Polling Station
-                            </th>
-                            <th scope="col" className="px-6 py-3.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                              Created By
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                          {filteredVoters.map((voter) => (
-                            <tr key={voter.nationalid} className="hover:bg-gray-50 transition-colors duration-150">
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-kweli-dark">
-                                {voter.nationalid}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                                {`${voter.firstname} ${voter.middlename ? voter.middlename + ' ' : ''}${voter.surname}`}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-mono">
-                                {voter.did}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                                <span className="px-2 py-1 text-xs font-medium bg-blue-50 text-blue-700 rounded-full">
-                                  {voter.designated_polling_station}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                                {voter.created_by}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+          {isLoading ? (
+            <div className="flex justify-center items-center py-20">
+              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-kweli-primary"></div>
+            </div>
+          ) : (
+            <>
+              {activeTab === 'voters' && (
+                <div className="animate-fade-in">
+                  <div className="flex items-center mb-4">
+                    <div className="h-8 w-8 bg-kweli-primary/10 rounded-full flex items-center justify-center mr-3">
+                      <svg className="h-4 w-4 text-kweli-primary" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-kweli-dark">Registered Voters</h3>
+                      <p className="text-sm text-gray-600">Total: {filteredVoters.length} voters</p>
                     </div>
                   </div>
-                </div>
-              ) : (
-                <div className="text-center py-8 bg-white rounded-lg shadow-soft-inner">
-                  <svg className="mx-auto h-12 w-12 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <h3 className="mt-2 text-sm font-medium text-gray-700">No voters found</h3>
-                  <p className="mt-1 text-sm text-gray-500">Try adjusting your search or filters.</p>
+  
+                  {filteredVoters.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <div className="inline-block min-w-full align-middle">
+                        <div className="overflow-hidden border border-gray-200 rounded-lg shadow-soft-sm">
+                          <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-100">
+                              <tr>
+                                <th scope="col" className="px-6 py-3.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                                  National ID
+                                </th>
+                                <th scope="col" className="px-6 py-3.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                                  Name
+                                </th>
+                                <th scope="col" className="px-6 py-3.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                                  DID
+                                </th>
+                                <th scope="col" className="px-6 py-3.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                                  Polling Station
+                                </th>
+                                <th scope="col" className="px-6 py-3.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                                  Created By
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                              {filteredVoters.map((voter) => (
+                                <tr key={voter.nationalid || voter.id} className="hover:bg-gray-50 transition-colors duration-150">
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-kweli-dark">
+                                    {voter.nationalid || voter.national_id}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                    {`${voter.firstname || voter.first_name || ''} ${(voter.middlename || voter.middle_name) ? (voter.middlename || voter.middle_name) + ' ' : ''}${voter.surname || voter.last_name || ''}`}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-mono">
+                                    {voter.did || '—'}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                    <span className="px-2 py-1 text-xs font-medium bg-blue-50 text-blue-700 rounded-full">
+                                      {voter.designated_polling_station}
+                                    </span>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                    {voter.created_by || '—'}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 bg-white rounded-lg shadow-soft-inner">
+                      <svg className="mx-auto h-12 w-12 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <h3 className="mt-2 text-sm font-medium text-gray-700">No voters found</h3>
+                      <p className="mt-1 text-sm text-gray-500">Try adjusting your search or filters.</p>
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
-          )}
-          
-          {activeTab === 'keypersons' && (
-            <div className="animate-fade-in">
-              <div className="flex items-center mb-4">
-                <div className="h-8 w-8 bg-kweli-primary/10 rounded-full flex items-center justify-center mr-3">
-                  <svg className="h-4 w-4 text-kweli-primary" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-kweli-dark">Election Officials & Observers</h3>
-                  <p className="text-sm text-gray-600">Total: {filteredKeypersons.length} keypersons</p>
-                </div>
-              </div>
               
-              {filteredKeypersons.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <div className="inline-block min-w-full align-middle">
-                    <div className="overflow-hidden border border-gray-200 rounded-lg shadow-soft-sm">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-100">
-                          <tr>
-                            <th scope="col" className="px-6 py-3.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                              National ID
-                            </th>
-                            <th scope="col" className="px-6 py-3.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                              Name
-                            </th>
-                            <th scope="col" className="px-6 py-3.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                              Role
-                            </th>
-                            <th scope="col" className="px-6 py-3.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                              Polling Station
-                            </th>
-                            <th scope="col" className="px-6 py-3.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                              Party / Organization
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                          {filteredKeypersons.map((person) => (
-                            <tr key={person.nationalid} className="hover:bg-gray-50 transition-colors duration-150">
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-kweli-dark">
-                                {person.nationalid}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                                {`${person.firstname} ${person.middlename ? person.middlename + ' ' : ''}${person.surname}`}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                <RoleBadge role={person.role} />
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                                <span className="px-2 py-1 text-xs font-medium bg-blue-50 text-blue-700 rounded-full">
-                                  {person.designated_polling_station}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                                {person.political_party || person.stakeholder || '—'}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+              {activeTab === 'keypersons' && (
+                <div className="animate-fade-in">
+                  <div className="flex items-center mb-4">
+                    <div className="h-8 w-8 bg-kweli-primary/10 rounded-full flex items-center justify-center mr-3">
+                      <svg className="h-4 w-4 text-kweli-primary" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-kweli-dark">Election Officials & Observers</h3>
+                      <p className="text-sm text-gray-600">Total: {filteredKeypersons.length} keypersons</p>
                     </div>
                   </div>
-                </div>
-              ) : (
-                <div className="text-center py-8 bg-white rounded-lg shadow-soft-inner">
-                  <svg className="mx-auto h-12 w-12 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <h3 className="mt-2 text-sm font-medium text-gray-700">No keypersons found</h3>
-                  <p className="mt-1 text-sm text-gray-500">Try adjusting your search or filters.</p>
+                  
+                  {filteredKeypersons.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <div className="inline-block min-w-full align-middle">
+                        <div className="overflow-hidden border border-gray-200 rounded-lg shadow-soft-sm">
+                          <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-100">
+                              <tr>
+                                <th scope="col" className="px-6 py-3.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                                  National ID
+                                </th>
+                                <th scope="col" className="px-6 py-3.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                                  Name
+                                </th>
+                                <th scope="col" className="px-6 py-3.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                                  Role
+                                </th>
+                                <th scope="col" className="px-6 py-3.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                                  Polling Station
+                                </th>
+                                <th scope="col" className="px-6 py-3.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                                  Party / Organization
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                              {filteredKeypersons.map((person) => (
+                                <tr key={person.nationalid || person.national_id || person.id} className="hover:bg-gray-50 transition-colors duration-150">
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-kweli-dark">
+                                    {person.nationalid || person.national_id}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                    {`${person.firstname || person.first_name || ''} ${(person.middlename || person.middle_name) ? (person.middlename || person.middle_name) + ' ' : ''}${person.surname || person.last_name || ''}`}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                    <RoleBadge role={person.role} />
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                    <span className="px-2 py-1 text-xs font-medium bg-blue-50 text-blue-700 rounded-full">
+                                      {person.designated_polling_station}
+                                    </span>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                    {person.political_party || person.stakeholder || '—'}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 bg-white rounded-lg shadow-soft-inner">
+                      <svg className="mx-auto h-12 w-12 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <h3 className="mt-2 text-sm font-medium text-gray-700">No keypersons found</h3>
+                      <p className="mt-1 text-sm text-gray-500">Try adjusting your search or filters.</p>
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
+            </>
           )}
         </div>
       </div>

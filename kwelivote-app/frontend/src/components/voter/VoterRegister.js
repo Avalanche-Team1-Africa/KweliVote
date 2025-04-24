@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import VoterStep1 from './VoterStep1';
 import VoterStep2 from './VoterStep2';
+import { voterAPI } from '../../utils/api';
 
 const VoterRegister = () => {
   const [currentStep, setCurrentStep] = useState(1);
@@ -18,6 +19,8 @@ const VoterRegister = () => {
   });
   
   const [showSuccess, setShowSuccess] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
   
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -47,28 +50,56 @@ const VoterRegister = () => {
     window.scrollTo(0, 0);
   };
   
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Here would be the API call to save the voter
-    console.log('Voter data submitted:', formData);
+    setIsSubmitting(true);
+    setError('');
     
-    // Show success message
-    setShowSuccess(true);
-    
-    // Reset form after submission with a delay
-    setTimeout(() => {
-      setFormData({
-        nationalid: '',
-        firstname: '',
-        middlename: '',
-        surname: '',
-        designatedPollingStation: '',
-        biometricData: null,
-        biometricImage: null,
-      });
-      setCurrentStep(1);
-      setShowSuccess(false);
-    }, 3000);
+    try {
+      // Get the logged-in user info
+      const userInfo = JSON.parse(sessionStorage.getItem('userInfo') || '{}');
+      
+      // Prepare voter data for API with correct field names matching the backend
+      const voterData = {
+        nationalid: formData.nationalid,
+        firstname: formData.firstname,
+        middlename: formData.middlename,
+        surname: formData.surname,
+        designated_polling_station: formData.designatedPollingStation,
+        did: `did:example:${formData.nationalid}`, // Generate a basic DID based on the national ID
+        created_by: userInfo.username || 'system' // Use the logged-in username or default to 'system'
+      };
+
+      // Create the voter
+      const createdVoter = await voterAPI.createVoter(voterData);
+      console.log('Voter created:', createdVoter);
+      
+      // Handle biometric data upload here if needed
+      // This would typically involve a separate API call for file upload
+      
+      // Show success message
+      setShowSuccess(true);
+      
+      // Reset form after successful submission
+      setTimeout(() => {
+        setFormData({
+          nationalid: '',
+          firstname: '',
+          middlename: '',
+          surname: '',
+          designatedPollingStation: '',
+          biometricData: null,
+          biometricImage: null,
+        });
+        setCurrentStep(1);
+        setShowSuccess(false);
+      }, 3000);
+    } catch (error) {
+      console.error('Error registering voter:', error);
+      setError(error.message || 'Failed to register voter. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
   
   const steps = [
@@ -91,6 +122,17 @@ const VoterRegister = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <span>Voter registered successfully!</span>
+            </div>
+          </div>
+        )}
+        
+        {error && (
+          <div className="mb-6 bg-red-50 border-l-4 border-red-400 text-red-700 p-4 rounded-md shadow-soft-sm animate-fade-in" role="alert">
+            <div className="flex items-center">
+              <svg className="h-5 w-5 mr-2 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>{error}</span>
             </div>
           </div>
         )}
@@ -141,6 +183,7 @@ const VoterRegister = () => {
               handleFileChange={handleFileChange}
               prevStep={prevStep}
               handleSubmit={handleSubmit}
+              isSubmitting={isSubmitting}
             />
           )}
         </form>

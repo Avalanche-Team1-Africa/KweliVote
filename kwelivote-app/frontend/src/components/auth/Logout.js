@@ -9,14 +9,24 @@ const Logout = () => {
   const handleLogout = () => {
     setIsLoggingOut(true);
     
-    // Simulate API delay
-    setTimeout(() => {
+    try {
       // Call the logout method from authAPI
       authAPI.logout();
       
-      // Redirect to home page
-      navigate('/', { replace: true });
-    }, 500);
+      // Force clear the session storage to ensure all user data is removed
+      sessionStorage.clear();
+      
+      // Small delay to show the logout animation
+      setTimeout(() => {
+        // Redirect to home page and force a page refresh to reset the app state
+        window.location.href = '/';
+      }, 500);
+    } catch (error) {
+      console.error('Logout error:', error);
+      // If there's an error, still clear session and redirect
+      sessionStorage.clear();
+      window.location.href = '/';
+    }
   };
 
   return (
