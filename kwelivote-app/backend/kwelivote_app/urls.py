@@ -27,7 +27,8 @@ from .views import (
     KeyPersonTokenObtainPairView,
     get_user_info,
     create_user,
-    create_keyperson_with_user
+    create_keyperson_with_user,
+    save_voter_biometric_template
 )
 
 # Set up DRF router
@@ -52,4 +53,7 @@ urlpatterns = [
     # User management endpoints
     path('api/users/', create_user, name='create_user'),
     path('api/keyperson-with-user/', create_keyperson_with_user, name='create_keyperson_with_user'),
+    
+    # Biometric endpoint
+    path('api/voters/<str:voter_id>/biometric-template/', save_voter_biometric_template, name='save_voter_biometric_template'),
 ]

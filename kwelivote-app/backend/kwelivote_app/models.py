@@ -75,6 +75,13 @@ class Voter(models.Model):
     nationalid = models.CharField(primary_key=True, max_length=20)
     did = models.CharField(max_length=255)
     designated_polling_station = models.CharField(max_length=100)
+    
+    # Biometric data fields
+    biometric_data = models.BinaryField(blank=True, null=True)
+    biometric_image = models.ImageField(upload_to='voter_biometrics/', blank=True, null=True)
+    biometric_template = models.JSONField(blank=True, null=True)
+    has_template = models.BooleanField(default=False)
+    
     created_by = models.CharField(max_length=100)
     created_datetime = models.DateTimeField(default=timezone.now)
 

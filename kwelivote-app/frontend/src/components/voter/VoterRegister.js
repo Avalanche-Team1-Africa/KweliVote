@@ -74,7 +74,7 @@ const VoterRegister = () => {
         designated_polling_station: formData.designatedPollingStation,
         did: `did:example:${formData.nationalid}`, // Generate a basic DID based on the national ID
         created_by: userInfo.username || 'system', // Use the logged-in username or default to 'system',
-        has_biometric_template: fingerprintTemplate !== null
+        has_template: fingerprintTemplate !== null
       };
 
       // Create the voter
@@ -84,12 +84,12 @@ const VoterRegister = () => {
       // Handle biometric data upload
       if (fingerprintTemplate) {
         try {
-          // In a real implementation, you would have an API endpoint to save the biometric template
-          // This is a placeholder for the actual API call
-          console.log('Saving fingerprint template for voter:', formData.nationalid, fingerprintTemplate);
-          
-          // Example API call (commented out as it doesn't exist in the current API)
-          // await voterAPI.saveBiometricTemplate(formData.nationalid, fingerprintTemplate);
+          // Save the fingerprint template to the database using our new API endpoint
+          const templateResult = await voterAPI.saveBiometricTemplate(
+            formData.nationalid, 
+            fingerprintTemplate
+          );
+          console.log('Fingerprint template saved:', templateResult);
         } catch (bioError) {
           console.error('Error saving biometric template:', bioError);
           // Continue with success flow even if biometric save fails

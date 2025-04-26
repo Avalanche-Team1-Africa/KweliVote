@@ -183,6 +183,15 @@ export const voterAPI = {
   
   async deleteVoter(id) {
     return authenticatedRequest(`${API_BASE_URL}/voters/${id}/`, 'DELETE');
+  },
+  
+  // New method to save biometric template
+  async saveBiometricTemplate(voterId, template) {
+    return authenticatedRequest(
+      `${API_BASE_URL}/voters/${voterId}/biometric-template/`, 
+      'POST', 
+      { template }
+    );
   }
 };
 
