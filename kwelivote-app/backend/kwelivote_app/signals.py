@@ -38,6 +38,15 @@ def create_user_for_keyperson(sender, instance, **kwargs):
         # This is a new record, continue with user creation
         pass
     
+    # Check if we're in a transaction context - this means we're likely in the create_keyperson_with_user view
+    # which will handle user creation with user-provided details
+    import inspect
+    stack_frames = inspect.stack()
+    for frame in stack_frames:
+        if 'create_keyperson_with_user' in frame.function:
+            # If we're in the transaction-based view, skip automatic user creation
+            return
+    
     # Generate username and password
     username = generate_username(instance)
     password = generate_password()

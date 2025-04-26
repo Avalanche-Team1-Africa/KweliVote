@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authAPI } from '../utils/api';
+import { useAuth } from '../utils/AuthContext';
 
 const Login = () => {
   const [username, setUsername] = useState('');
@@ -9,6 +10,7 @@ const Login = () => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   useEffect(() => {
     // Get the selected role from session storage
@@ -45,8 +47,9 @@ const Login = () => {
         nationalId: nationalid,
         name,
       };
-        
-      sessionStorage.setItem('userInfo', JSON.stringify(userInfo));
+      
+      // Use the context login function to persist user info in context and storage
+      login(userInfo);
         
       // Redirect based on role
       switch(effectiveRole) {

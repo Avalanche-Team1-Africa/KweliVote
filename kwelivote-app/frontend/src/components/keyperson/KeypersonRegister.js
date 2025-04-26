@@ -73,36 +73,46 @@ const KeypersonRegister = () => {
     setError('');
     
     try {
-      // Prepare keyperson data for API
-      const keypersonData = {
-        national_id: formData.nationalid,
-        first_name: formData.firstname,
-        middle_name: formData.middlename,
+      // Validation checks before submission
+      if (formData.role === 'Observers' && !formData.observerType) {
+        setError('Observer type is required for Observers');
+        setIsSubmitting(false);
+        return;
+      }
+      
+      if (formData.role === 'Party Agents' && !formData.politicalParty) {
+        setError('Political party is required for Party Agents');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Prepare data for API - combining keyperson and user data for a single transaction
+      const combinedData = {
+        // Keyperson data
+        nationalid: formData.nationalid,
+        firstname: formData.firstname,
+        middlename: formData.middlename || null,
         surname: formData.surname,
         role: formData.role,
         political_party: formData.politicalParty || null,
         designated_polling_station: formData.designatedPollingStation,
         observer_type: formData.observerType || null,
-        stakeholder: formData.stakeholder || null
-      };
-
-      // First create the keyperson
-      const createdKeyperson = await keypersonAPI.createKeyperson(keypersonData);
-      console.log('Keyperson created:', createdKeyperson);
-
-      // If this is not an observer and we need to create a user account
-      if (!isObserver && formData.username && formData.password) {
-        // Create user account linked to the keyperson
-        const userData = {
+        stakeholder: formData.stakeholder || null,
+        did: `did:example:${formData.nationalid}`,
+        created_by: 'system',
+        biometric_data: null,
+        biometric_image: null,
+        
+        // User data - included in the same request for non-observers
+        ...((!isObserver) && {
           username: formData.username,
           password: formData.password,
-          national_id: formData.nationalid, // Link to the keyperson by national ID
-          role: formData.role
-        };
-        
-        await keypersonAPI.createKeypersonUser(userData);
-        console.log('User account created for keyperson');
-      }
+        })
+      };
+
+      // Use the new transaction-based endpoint that creates both keyperson and user atomically
+      const result = await keypersonAPI.createKeypersonWithUser(combinedData);
+      console.log('Registration result:', result);
       
       // Show success message
       setShowSuccess(true);
@@ -130,7 +140,38 @@ const KeypersonRegister = () => {
       }, 3000);
     } catch (error) {
       console.error('Error registering keyperson:', error);
-      setError(error.message || 'Failed to register keyperson. Please try again.');
+      
+      // Extract more specific error message if available from the API response
+      if (error.response && error.response.data) {
+        // Handle object or string error responses
+        if (error.response.data.error) {
+          // Direct error message
+          setError(error.response.data.error);
+        } else if (error.response.data.details) {
+          // Detailed validation errors
+          const errorDetails = error.response.data.details;
+          const errorMessages = Object.entries(errorDetails)
+            .map(([key, value]) => {
+              // Handle both array and string error messages
+              const errorValue = Array.isArray(value) ? value.join(', ') : value;
+              return `${key}: ${errorValue}`;
+            })
+            .join('; ');
+          setError(errorMessages);
+        } else {
+          // General case for other error formats
+          const errorMessages = Object.entries(error.response.data)
+            .map(([key, value]) => {
+              const errorValue = Array.isArray(value) ? value.join(', ') : value;
+              return `${key}: ${errorValue}`;
+            })
+            .join('; ');
+          setError(errorMessages || 'Failed to register keyperson. Please try again.');
+        }
+      } else {
+        // For network errors or other non-API errors
+        setError(error.message || 'Failed to register keyperson. Please try again.');
+      }
     } finally {
       setIsSubmitting(false);
     }

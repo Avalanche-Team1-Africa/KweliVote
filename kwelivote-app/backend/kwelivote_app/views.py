@@ -14,6 +14,7 @@ from .serializers import (
     CandidateSerializer,
     ResultsCountSerializer
 )
+from django.db import transaction
 
 # Custom token serializer for KeyPerson model
 class KeyPersonTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -84,6 +85,176 @@ def get_user_info(request):
             'polling_station': keyperson.designated_polling_station
         })
     return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def create_user(request):
+    """
+    Create a user account for a keyperson
+    """
+    data = request.data
+    try:
+        # Check if required fields are provided
+        if not data.get('username') or not data.get('password') or not data.get('national_id'):
+            return Response(
+                {'error': 'Username, password, and national_id are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if user already exists
+        if User.objects.filter(username=data['username']).exists():
+            return Response(
+                {'error': 'Username already exists'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if keyperson exists
+        try:
+            keyperson = KeyPerson.objects.get(nationalid=data['national_id'])
+        except KeyPerson.DoesNotExist:
+            return Response(
+                {'error': 'Keyperson with this national ID does not exist'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check if keyperson already has a user account
+        if keyperson.user:
+            return Response(
+                {'error': 'Keyperson already has a user account'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Create user
+        user = User.objects.create_user(
+            username=data['username'],
+            password=data['password'],
+            email=f"{data['username']}@kwelivote.example.com"
+        )
+        
+        # Associate user with keyperson
+        keyperson.user = user
+        keyperson.save()
+        
+        return Response(
+            {'success': True, 'message': 'User created successfully'},
+            status=status.HTTP_201_CREATED
+        )
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def create_keyperson_with_user(request):
+    """
+    Create both a keyperson and an associated user account in a single transaction.
+    If any part fails, the whole operation is rolled back.
+    This endpoint is publicly accessible (no authentication required) to allow keyperson registration.
+    """
+    with transaction.atomic():
+        try:
+            data = request.data
+            
+            # Extract keyperson data
+            keyperson_data = {
+                'nationalid': data.get('nationalid'),
+                'firstname': data.get('firstname'),
+                'middlename': data.get('middlename'),
+                'surname': data.get('surname'),
+                'role': data.get('role'),
+                'political_party': data.get('political_party'),
+                'designated_polling_station': data.get('designated_polling_station'),
+                'observer_type': data.get('observer_type'),
+                'stakeholder': data.get('stakeholder'),
+                'did': data.get('did'),
+                'created_by': data.get('created_by', 'system'),
+                'biometric_data': data.get('biometric_data'),
+                'biometric_image': data.get('biometric_image')
+            }
+            
+            # Validate required keyperson fields
+            required_fields = ['nationalid', 'firstname', 'surname', 'role', 'designated_polling_station', 'created_by']
+            missing_fields = [field for field in required_fields if not keyperson_data.get(field)]
+            if missing_fields:
+                return Response(
+                    {'error': f"Missing required keyperson fields: {', '.join(missing_fields)}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Role-specific validation
+            if keyperson_data['role'] == 'Observers' and not keyperson_data.get('observer_type'):
+                return Response(
+                    {'error': 'Observer type is required for Observers'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if keyperson_data['role'] == 'Party Agents' and not keyperson_data.get('political_party'):
+                return Response(
+                    {'error': 'Political party is required for Party Agents'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Check if keyperson with nationalid already exists
+            if KeyPerson.objects.filter(nationalid=keyperson_data['nationalid']).exists():
+                return Response(
+                    {'error': f"Keyperson with National ID {keyperson_data['nationalid']} already exists"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Create keyperson
+            keyperson_serializer = KeyPersonSerializer(data=keyperson_data)
+            if not keyperson_serializer.is_valid():
+                return Response(
+                    {'error': 'Invalid keyperson data', 'details': keyperson_serializer.errors},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            keyperson = keyperson_serializer.save()
+            
+            # For non-observer roles, create a user account
+            is_observer = keyperson_data['role'] == 'Observers'
+            
+            if not is_observer:
+                # Extract user data
+                username = data.get('username')
+                password = data.get('password')
+                
+                # Validate user data
+                if not username or not password:
+                    # Roll back the transaction by raising an exception
+                    raise ValueError('Username and password are required for non-observer keypersons')
+                
+                # Check if username already exists
+                if User.objects.filter(username=username).exists():
+                    raise ValueError(f"Username '{username}' is already taken")
+                
+                # Create user and link to keyperson
+                user = User.objects.create_user(
+                    username=username, 
+                    password=password,
+                    email=f"{username}@kwelivote.example.com"
+                )
+                keyperson.user = user
+                keyperson.save()
+            
+            return Response(
+                {
+                    'success': True,
+                    'message': 'Keyperson successfully registered' + (' with user account' if not is_observer else ''),
+                    'keyperson': keyperson_serializer.data
+                },
+                status=status.HTTP_201_CREATED
+            )
+        except ValueError as e:
+            # For validation errors that we explicitly raise
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            # For unexpected errors
+            return Response(
+                {'error': f'An unexpected error occurred: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 @api_view(['GET'])
 def api_root(request, format=None):

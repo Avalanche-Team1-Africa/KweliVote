@@ -211,6 +211,29 @@ export const keypersonAPI = {
   // Additional endpoint for creating user accounts for keypersons
   async createKeypersonUser(data) {
     return authenticatedRequest(`${API_BASE_URL}/users/`, 'POST', data);
+  },
+
+  // New transaction-based endpoint for creating both keyperson and user in a single operation
+  async createKeypersonWithUser(data) {
+    // This endpoint doesn't require authentication for keyperson registration
+    try {
+      const response = await fetch(`${API_BASE_URL}/keyperson-with-user/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw { response: { status: response.status, data: errorData } };
+      }
+      
+      return await response.json();
+    } catch (error) {
+      throw handleApiError(error);
+    }
   }
 };
 

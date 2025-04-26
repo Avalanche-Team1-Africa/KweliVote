@@ -1,12 +1,11 @@
 # KweliVote Git Branching Workflow Cheatsheet
 
-This cheatsheet provides a guide for working with the KweliVote repository using a three-branch workflow: `main`, `dev`, and `test`.
+This cheatsheet provides a guide for working with the KweliVote repository using a two-branch workflow: `main` and `dev`.
 
 ## Branch Structure Overview
 
 - **`main`**: Production branch. Contains stable, released code.
-- **`dev`**: Development branch. Integration branch for features before moving to testing.
-- **`test`**: Testing branch. For QA and testing before code is promoted to production.
+- **`dev`**: Development branch. Used for both feature development and testing before moving to production.
 
 ## Basic Git Commands
 
@@ -32,13 +31,49 @@ git clone <repository-url>
 git fetch --all
 ```
 
+### Creating Dev Branch
+
+You can create the dev branch either locally or on GitHub first. Here are both approaches:
+
+#### Option 1: Creating Dev Branch Locally First
+
+```
+# Ensure you have the latest main branch
+git checkout main
+git pull origin main
+
+# Create dev branch locally
+git checkout -b dev
+git push -u origin dev
+```
+
+#### Option 2: Creating Dev Branch on GitHub First
+
+1. On GitHub, navigate to your repository
+2. Click on the "main" branch dropdown
+3. Enter "dev" in the search box and click "Create branch: dev from 'main'"
+4. Then fetch the new branch locally:
+
+```
+# Fetch the remote branches
+git fetch --all
+
+# Checkout the dev branch locally
+git checkout dev
+```
+
+#### Which Approach to Choose?
+
+- **GitHub First**: Good when you need to set up branch protection rules or when you work from multiple computers.
+- **Local First**: More convenient when you're already working locally and ready to start development.
+
 ### Working with the Dev Branch
 
 ```
 # Switch to dev branch
 git checkout dev
 
-# Create a feature branch from dev
+# Create a feature branch from dev (optional but recommended for larger features)
 git checkout -b feature/your-feature-name dev
 
 # Work on your feature...
@@ -48,40 +83,22 @@ git checkout -b feature/your-feature-name dev
 git add .
 git commit -m "Descriptive commit message"
 
-# Update your feature branch with latest dev changes
-git checkout dev
-git pull origin dev
-git checkout feature/your-feature-name
-git rebase dev
-
-# Push feature branch to remote
-git push origin feature/your-feature-name
-
-# Create a pull request to merge into dev (through GitHub/GitLab interface)
-
-# After PR approval, merge to dev
+# If you used a feature branch, merge it back to dev when complete
 git checkout dev
 git merge feature/your-feature-name
 git push origin dev
-```
 
-### Working with the Test Branch
-
-```
-# Once dev is ready for testing, merge to test branch
-git checkout test
-git pull origin test
-git merge dev
-git push origin test
+# Test your changes in the dev branch
+# [Run tests, manually verify functionality]
 ```
 
 ### Working with the Main Branch (Production)
 
 ```
-# After testing is complete, merge to main for release
+# After testing is complete on dev, merge to main for release
 git checkout main
 git pull origin main
-git merge test
+git merge dev
 git push origin main
 
 # Tag the release
@@ -110,11 +127,6 @@ git push origin main
 git checkout dev
 git merge hotfix/bug-description
 git push origin dev
-
-# Update the test branch too
-git checkout test
-git merge dev
-git push origin test
 ```
 
 ### Resolving Merge Conflicts
@@ -144,28 +156,25 @@ git reset --hard HEAD~1
 
 1. **Always pull before pushing**: `git pull origin <branch-name>`
 2. **Create meaningful commit messages**
-3. **Keep feature branches short-lived**
-4. **Regularly rebase feature branches with dev**
-5. **Delete branches after they're merged**:
+3. **For complex features, use feature branches off of dev**
+4. **Test thoroughly in dev before merging to main**
+5. **Delete feature branches after they're merged**:
    ```
    git branch -d feature/your-feature-name
    git push origin --delete feature/your-feature-name
    ```
-6. **Don't merge directly to main** - Always follow the dev → test → main pathway
-7. **Use tags for releases** on the main branch
+6. **Use tags for releases** on the main branch
 
 ## Visual Workflow Diagram
 
 ```
-main    o---o---o---o---o  (stable/production)
-          \         /
-test       o---o---o       (testing/QA)
-            \     /
-dev          o---o---o     (integration)
-             /     \
-feature1    o       \      (feature branches)
-                     \
-feature2              o
+main    o-----------o-----------o  (stable/production)
+         \           \
+dev       o---o---o---o---o---o    (development/testing)
+              /           \
+feature1     o             \       (optional feature branches)
+                            \
+feature2                     o
 ```
 
-This workflow helps maintain code quality and stability while facilitating collaborative development.
+This simplified workflow maintains code stability while being practical for solo development.

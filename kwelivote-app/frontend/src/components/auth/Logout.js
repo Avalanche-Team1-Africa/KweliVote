@@ -1,20 +1,18 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { authAPI } from '../../utils/api';
+import { useAuth } from '../../utils/AuthContext';
 
 const Logout = () => {
   const navigate = useNavigate();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const { logout } = useAuth();
 
   const handleLogout = () => {
     setIsLoggingOut(true);
     
     try {
-      // Call the logout method from authAPI
-      authAPI.logout();
-      
-      // Force clear the session storage to ensure all user data is removed
-      sessionStorage.clear();
+      // Use the context logout function
+      logout();
       
       // Small delay to show the logout animation
       setTimeout(() => {
