@@ -278,6 +278,10 @@ export const resultsAPI = {
   
   async createResult(data) {
     return authenticatedRequest(`${API_BASE_URL}/resultscount/`, 'POST', data);
+  },
+  
+  async updateResult(id, data) {
+    return authenticatedRequest(`${API_BASE_URL}/resultscount/${id}/`, 'PUT', data);
   }
 };
 

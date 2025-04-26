@@ -2,20 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { resultsAPI, candidateAPI } from '../../utils/api';
 
 const ResultsCount = () => {
-  const [formData, setFormData] = useState({
-    candidate: '',
-    pollingStation: '',
-    votes: '',
-    partyAgent: '',
-    observer: '',
-  });
-  
-  const [resultsList, setResultsList] = useState([]);
   const [candidates, setCandidates] = useState([]);
+  const [candidatesByPosition, setCandidatesByPosition] = useState({});
+  const [candidateVotes, setCandidateVotes] = useState({});
+  const [resultsList, setResultsList] = useState([]);
   const [showSuccessAlert, setShowSuccessAlert] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState({});
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [editingResult, setEditingResult] = useState(null);
+  const [editVotes, setEditVotes] = useState('');
+  const [candidateTypes, setCandidateTypes] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [pollingStation, setPollingStation] = useState('Station A');
+  const [partyAgent, setPartyAgent] = useState('100005');
+  const [observer, setObserver] = useState('100006');
   
   const pollingStations = [
     'Station A',
@@ -35,7 +37,20 @@ const ResultsCount = () => {
     { id: '100006', name: 'Sarah Davis' },
     { id: '100007', name: 'Robert Miller' },
   ];
+
+  // Get current user from session storage
+  useEffect(() => {
+    try {
+      const userInfo = JSON.parse(sessionStorage.getItem('userInfo') || '{}');
+      if (userInfo && userInfo.user) {
+        setCurrentUser(userInfo.user);
+      }
+    } catch (err) {
+      console.error('Error getting user info:', err);
+    }
+  }, []);
   
+  // Fetch candidates and results
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
@@ -43,8 +58,33 @@ const ResultsCount = () => {
         const candidatesData = await candidateAPI.getCandidates();
         setCandidates(candidatesData);
         
+        // Group candidates by position
+        const groupedCandidates = candidatesData.reduce((acc, candidate) => {
+          const position = candidate.candidate_type;
+          if (!acc[position]) {
+            acc[position] = [];
+          }
+          acc[position].push(candidate);
+          return acc;
+        }, {});
+        
+        setCandidatesByPosition(groupedCandidates);
+        
+        // Extract unique candidate types and sort them
+        const types = [...new Set(candidatesData.map(c => c.candidate_type))];
+        setCandidateTypes(types);
+        
         const resultsData = await resultsAPI.getResults();
         setResultsList(resultsData);
+        
+        // Initialize votes input state for each candidate
+        const votesState = {};
+        candidatesData.forEach(candidate => {
+          // Find if there's an existing result for this candidate
+          const existingResult = resultsData.find(r => r.candidate === candidate.nationalid);
+          votesState[candidate.nationalid] = existingResult ? existingResult.votes.toString() : '';
+        });
+        setCandidateVotes(votesState);
       } catch (err) {
         console.error('Error fetching data:', err);
         setError('Failed to load data. Please try refreshing the page.');
@@ -55,63 +95,120 @@ const ResultsCount = () => {
     
     fetchData();
   }, []);
-  
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData({
-      ...formData,
-      [name]: value,
+
+  const handleVoteChange = (candidateId, votes) => {
+    setCandidateVotes({
+      ...candidateVotes,
+      [candidateId]: votes
     });
   };
   
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
+  const handleAddResult = async (candidate) => {
+    const candidateId = candidate.nationalid;
+    const votes = candidateVotes[candidateId];
+    
+    if (!votes || isNaN(parseInt(votes)) || parseInt(votes) < 0) {
+      setError(`Please enter a valid vote count for ${candidate.firstname} ${candidate.surname}`);
+      setTimeout(() => setError(''), 3000);
+      return;
+    }
+    
+    // Update submitting state for this candidate
+    setIsSubmitting({ ...isSubmitting, [candidateId]: true });
     setError('');
     
     try {
-      const resultData = {
-        candidate: formData.candidate,
-        polling_station: formData.pollingStation,
-        votes: parseInt(formData.votes),
-        party_agent: formData.partyAgent,
-        observer: formData.observer
-      };
-
-      const createdResult = await resultsAPI.createResult(resultData);
-      console.log('Result created:', createdResult);
+      // Find if there's an existing result for this candidate
+      const existingResult = resultsList.find(r => r.candidate === candidateId);
       
-      setResultsList([createdResult, ...resultsList]);
+      if (existingResult) {
+        // Update existing result
+        const updatedResultData = {
+          ...existingResult,
+          votes: parseInt(votes),
+          polling_station: pollingStation,
+          party_agent: partyAgent,
+          observer: observer
+        };
+        
+        const updatedResult = await resultsAPI.updateResult(existingResult.resultscount_id, updatedResultData);
+        
+        // Update the list with the new result
+        const updatedList = resultsList.map(r => 
+          r.resultscount_id === updatedResult.resultscount_id ? updatedResult : r
+        );
+        
+        setResultsList(updatedList);
+        setSuccessMessage(`Vote count updated for ${candidate.firstname} ${candidate.surname}!`);
+      } else {
+        // Get current user info
+        const userInfo = JSON.parse(sessionStorage.getItem('userInfo') || '{}');
+        const username = userInfo.user?.username || 'anonymous';
+        
+        // Create new result with all required fields
+        const resultData = {
+          // Generate a unique ID for new results
+          resultscount_id: `RES${Date.now().toString().slice(-6)}_${candidateId.slice(-4)}`,
+          candidate: candidateId,
+          polling_station: pollingStation,
+          votes: parseInt(votes),
+          party_agent: partyAgent,
+          observer: observer,
+          // Required fields that were missing
+          presiding_officer: userInfo.user?.keyperson?.nationalid || "100002", // Default to a known PO if user isn't one
+          created_by: username,
+          created_datetime: new Date().toISOString()
+        };
+        
+        const createdResult = await resultsAPI.createResult(resultData);
+        setResultsList([createdResult, ...resultsList]);
+        setSuccessMessage(`Results added for ${candidate.firstname} ${candidate.surname}!`);
+      }
       
       setShowSuccessAlert(true);
-      
-      setFormData({
-        candidate: '',
-        pollingStation: '',
-        votes: '',
-        partyAgent: '',
-        observer: '',
-      });
-      
       setTimeout(() => {
         setShowSuccessAlert(false);
       }, 3000);
     } catch (err) {
-      console.error('Error creating result:', err);
+      console.error('Error saving result:', err);
       setError(err.message || 'Failed to save results. Please try again.');
     } finally {
-      setIsSubmitting(false);
+      setIsSubmitting({ ...isSubmitting, [candidateId]: false });
     }
   };
 
-  const votesByParty = resultsList.reduce((acc, result) => {
-    const party = result.candidate_details?.political_party || 'Unknown';
-    if (!acc[party]) {
-      acc[party] = 0;
+  // Group results by candidate position
+  const resultsByPosition = resultsList.reduce((acc, result) => {
+    const position = result.candidate_details?.candidate_type || 'Unknown';
+    if (!acc[position]) {
+      acc[position] = [];
     }
-    acc[party] += result.votes;
+    acc[position].push(result);
     return acc;
   }, {});
+
+  // Check if a candidate already has results
+  const hasResults = (candidateId) => {
+    return resultsList.some(r => r.candidate === candidateId);
+  };
+
+  // Get result for a specific candidate
+  const getResultForCandidate = (candidateId) => {
+    return resultsList.find(r => r.candidate === candidateId);
+  };
+
+  // Check if user is a Presiding Officer or Deputy Presiding Officer
+  const canEditVotes = () => {
+    if (!currentUser || !currentUser.keyperson) return false;
+    const role = currentUser.keyperson.role;
+    return role === 'Presiding Officer (PO)' || role === 'Deputy Presiding Officer (DPO)';
+  };
+
+  // Get maximum votes for a particular position to scale the gauge bars
+  const getMaxVotesForPosition = (positionResults) => {
+    if (!positionResults || positionResults.length === 0) return 0;
+    return Math.max(...positionResults.map(result => result.votes));
+  };
 
   if (isLoading) {
     return (
@@ -139,308 +236,248 @@ const ResultsCount = () => {
             </div>
           </div>
         )}
-        
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-1">
-            <div className="bg-gradient-to-b from-gray-50 to-white rounded-xl shadow-soft p-6 border border-gray-100">
-              <div className="flex items-center mb-4">
-                <div className="h-8 w-8 bg-kweli-primary/10 rounded-full flex items-center justify-center mr-3">
-                  <svg className="h-4 w-4 text-kweli-primary" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M3 4a1 0 011-1h12a1 0 011 1v2a1 0 01-1 1H4a1 0 01-1-1V4zM3 10a1 0 011-1h6a1 0 011 1v6a1 0 01-1 1H4a1 0 01-1-1v-6zM14 9a1 0 00-1 1v6a1 0 001 1h2a1 0 001-1v-6a1 0 00-1-1h-2z" />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-bold text-kweli-dark">Add New Results</h3>
-              </div>
-              
-              {showSuccessAlert && (
-                <div className="mb-4 bg-green-50 border-l-4 border-green-500 text-green-700 p-4 rounded-md shadow-soft-sm animate-fade-in">
-                  <div className="flex items-center">
-                    <svg className="h-5 w-5 mr-2 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span>Results count added successfully!</span>
-                  </div>
-                </div>
-              )}
-              
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <label htmlFor="candidate" className="block text-sm font-medium text-gray-700">
-                    Candidate *
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                    <select
-                      id="candidate"
-                      name="candidate"
-                      value={formData.candidate}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-kweli-primary/50 focus:border-kweli-primary/50 transition-colors duration-200 appearance-none"
-                      style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
-                        backgroundPosition: 'right 0.5rem center', 
-                        backgroundRepeat: 'no-repeat', 
-                        backgroundSize: '1.5em 1.5em',
-                        paddingRight: '2.5rem' 
-                      }}
-                    >
-                      <option value="" disabled>Select a candidate</option>
-                      {candidates.map((candidate) => (
-                        <option key={candidate.id} value={candidate.id}>
-                          {candidate.name} - {candidate.type} ({candidate.party})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <label htmlFor="pollingStation" className="block text-sm font-medium text-gray-700">
-                    Polling Station *
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                    <select
-                      id="pollingStation"
-                      name="pollingStation"
-                      value={formData.pollingStation}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-kweli-primary/50 focus:border-kweli-primary/50 transition-colors duration-200 appearance-none"
-                      style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
-                        backgroundPosition: 'right 0.5rem center', 
-                        backgroundRepeat: 'no-repeat', 
-                        backgroundSize: '1.5em 1.5em',
-                        paddingRight: '2.5rem' 
-                      }}
-                    >
-                      <option value="" disabled>Select a polling station</option>
-                      {pollingStations.map((station) => (
-                        <option key={station} value={station}>
-                          {station}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <label htmlFor="votes" className="block text-sm font-medium text-gray-700">
-                    Number of Votes *
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                        <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
-                      </svg>
-                    </div>
-                    <input
-                      type="number"
-                      id="votes"
-                      name="votes"
-                      value={formData.votes}
-                      onChange={handleInputChange}
-                      required
-                      min="0"
-                      placeholder="Enter vote count"
-                      className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-kweli-primary/50 focus:border-kweli-primary/50 transition-colors duration-200"
-                    />
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <label htmlFor="partyAgent" className="block text-sm font-medium text-gray-700">
-                    Party Agent *
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                        <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
-                      </svg>
-                    </div>
-                    <select
-                      id="partyAgent"
-                      name="partyAgent"
-                      value={formData.partyAgent}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-kweli-primary/50 focus:border-kweli-primary/50 transition-colors duration-200 appearance-none"
-                      style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
-                        backgroundPosition: 'right 0.5rem center', 
-                        backgroundRepeat: 'no-repeat', 
-                        backgroundSize: '1.5em 1.5em',
-                        paddingRight: '2.5rem' 
-                      }}
-                    >
-                      <option value="" disabled>Select a party agent</option>
-                      {partyAgents.map((agent) => (
-                        <option key={agent.id} value={agent.id}>
-                          {agent.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <label htmlFor="observer" className="block text-sm font-medium text-gray-700">
-                    Observer *
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                        <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                        <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                    <select
-                      id="observer"
-                      name="observer"
-                      value={formData.observer}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-kweli-primary/50 focus:border-kweli-primary/50 transition-colors duration-200 appearance-none"
-                      style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
-                        backgroundPosition: 'right 0.5rem center', 
-                        backgroundRepeat: 'no-repeat', 
-                        backgroundSize: '1.5em 1.5em',
-                        paddingRight: '2.5rem' 
-                      }}
-                    >
-                      <option value="" disabled>Select an observer</option>
-                      {observers.map((observer) => (
-                        <option key={observer.id} value={observer.id}>
-                          {observer.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                
-                <div className="pt-4">
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className={`w-full flex items-center justify-center bg-gradient-to-r from-kweli-accent to-kweli-primary text-white font-medium py-2.5 px-6 rounded-lg shadow-soft hover:shadow-soft-md transition-all duration-300 transform hover:-translate-y-0.5 ${isSubmitting ? 'opacity-80' : ''}`}
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        <svg className="mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
-                        </svg>
-                        Add Results
-                      </>
-                    )}
-                  </button>
-                </div>
-              </form>
+
+        {showSuccessAlert && (
+          <div className="mb-6 bg-green-50 border-l-4 border-green-500 text-green-700 p-4 rounded-md shadow-soft-sm animate-fade-in">
+            <div className="flex items-center">
+              <svg className="h-5 w-5 mr-2 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>{successMessage}</span>
             </div>
           </div>
-          
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-xl shadow-soft p-6 border border-gray-100">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center">
-                  <div className="h-8 w-8 bg-kweli-primary/10 rounded-full flex items-center justify-center mr-3">
-                    <svg className="h-4 w-4 text-kweli-primary" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M3 3a1 1 0 000 2v8a2 2 0 002 2h2.586l-1.293 1.293a1 1 0 101.414 1.414L10 15.414l2.293 2.293a1 1 0 001.414-1.414L12.414 15H15a2 2 0 002-2V5a1 1 0 100-2H3zm11.707 4.707a1 1 0 00-1.414-1.414L10 9.586 8.707 8.293a1 1 0 00-1.414 0l-2 2a1 1 0 101.414 1.414L8 10.414l1.293 1.293a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <h3 className="text-lg font-bold text-kweli-dark">Results Summary</h3>
-                </div>
-                <div className="text-sm text-gray-500">
-                  Total Entries: {resultsList.length}
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                {Object.entries(votesByParty).map(([party, votes]) => (
-                  <div key={party} className="bg-gray-50 rounded-lg p-4 shadow-soft-inner">
-                    <div className="flex justify-between items-center mb-2">
-                      <h4 className="font-bold text-gray-700">{party}</h4>
-                      <span className="text-lg font-bold text-kweli-primary">{votes} votes</span>
-                    </div>
-                    <div className="relative pt-1">
-                      <div className="overflow-hidden h-2 mb-1 text-xs flex rounded bg-gray-200">
-                        <div 
-                          style={{ width: `${Math.min(100, votes / 2)}%` }} 
-                          className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-gradient-to-r from-kweli-accent to-kweli-primary"
-                        ></div>
-                      </div>
-                    </div>
-                  </div>
+        )}
+        
+        {/* Global settings for all candidate entries */}
+        <div className="mb-8 bg-gray-50 rounded-xl p-5 border border-gray-200 shadow-soft-sm">
+          <h3 className="text-lg font-bold text-kweli-dark mb-4">Global Settings</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <label htmlFor="pollingStation" className="block text-sm font-medium text-gray-700">
+                Polling Station
+              </label>
+              <select
+                id="pollingStation"
+                value={pollingStation}
+                onChange={(e) => setPollingStation(e.target.value)}
+                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-kweli-primary/50"
+              >
+                {pollingStations.map((station) => (
+                  <option key={station} value={station}>
+                    {station}
+                  </option>
                 ))}
-              </div>
-              
-              <div className="overflow-x-auto">
-                <div className="inline-block min-w-full align-middle">
-                  <div className="overflow-hidden border border-gray-200 rounded-lg shadow-soft-sm">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-100">
-                        <tr>
-                          <th scope="col" className="px-4 py-3.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                            Candidate
-                          </th>
-                          <th scope="col" className="px-4 py-3.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                            Position
-                          </th>
-                          <th scope="col" className="px-4 py-3.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                            Party
-                          </th>
-                          <th scope="col" className="px-4 py-3.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                            Polling Station
-                          </th>
-                          <th scope="col" className="px-4 py-3.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                            Votes
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {resultsList.map((result, index) => (
-                          <tr key={result.resultscount_id} className={`hover:bg-gray-50 transition-colors duration-150 ${index === 0 && 'animate-fade-in'}`}>
-                            <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-kweli-dark">
-                              {`${result.candidate_details.firstname} ${result.candidate_details.surname}`}
-                            </td>
-                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
-                              <span className="px-2 py-1 text-xs font-medium bg-blue-50 text-blue-700 rounded-full">
-                                {result.candidate_details.candidate_type}
-                              </span>
-                            </td>
-                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
-                              <PartyBadge party={result.candidate_details.political_party} />
-                            </td>
-                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
-                              {result.polling_station}
-                            </td>
-                            <td className="px-4 py-4 whitespace-nowrap text-sm font-bold text-kweli-dark">
-                              {result.votes}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
+              </select>
+            </div>
+            
+            <div className="space-y-2">
+              <label htmlFor="partyAgent" className="block text-sm font-medium text-gray-700">
+                Party Agent
+              </label>
+              <select
+                id="partyAgent"
+                value={partyAgent}
+                onChange={(e) => setPartyAgent(e.target.value)}
+                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-kweli-primary/50"
+              >
+                {partyAgents.map((agent) => (
+                  <option key={agent.id} value={agent.id}>
+                    {agent.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <div className="space-y-2">
+              <label htmlFor="observer" className="block text-sm font-medium text-gray-700">
+                Observer
+              </label>
+              <select
+                id="observer"
+                value={observer}
+                onChange={(e) => setObserver(e.target.value)}
+                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-kweli-primary/50"
+              >
+                {observers.map((obs) => (
+                  <option key={obs.id} value={obs.id}>
+                    {obs.name}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>
+
+        {/* Candidates grouped by position */}
+        {candidateTypes.map((position) => {
+          const positionCandidates = candidatesByPosition[position] || [];
+          const positionResults = resultsByPosition[position] || [];
+          const maxVotes = getMaxVotesForPosition(positionResults);
+          
+          return (
+            <div key={position} className="mb-8">
+              <div className="bg-blue-50 p-3 rounded-t-lg border border-blue-100">
+                <div className="flex items-center">
+                  <div className="h-6 w-6 bg-blue-100 rounded-full flex items-center justify-center mr-2">
+                    <svg className="h-3 w-3 text-blue-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M9.504 1.132a1 1 0 01.992 0l1.75 1a1 1 0 11-.992 1.736L10 3.152l-1.254.716a1 1 0 11-.992-1.736l1.75-1z" />
+                    </svg>
+                  </div>
+                  <h4 className="text-md font-bold text-blue-800">{position}</h4>
+                </div>
+              </div>
+              
+              <div className="border-x border-gray-200">
+                {/* Header row */}
+                <div className="grid grid-cols-12 gap-2 bg-gray-100 py-2 px-4 border-b border-gray-200">
+                  <div className="col-span-3 text-sm font-medium text-gray-700">Candidate</div>
+                  <div className="col-span-3 text-sm font-medium text-gray-700">Party</div>
+                  <div className="col-span-2 text-sm font-medium text-gray-700">Current Votes</div>
+                  <div className="col-span-2 text-sm font-medium text-gray-700">Vote Count</div>
+                  <div className="col-span-2 text-sm font-medium text-gray-700">Action</div>
+                </div>
+                
+                {/* Candidate rows */}
+                {positionCandidates.map((candidate) => {
+                  const candidateId = candidate.nationalid;
+                  const candidateResult = getResultForCandidate(candidateId);
+                  const hasExistingResult = !!candidateResult;
+                  
+                  return (
+                    <div 
+                      key={candidateId}
+                      className={`grid grid-cols-12 gap-2 py-3 px-4 border-b border-gray-200 ${
+                        hasExistingResult ? 'bg-white' : 'bg-gray-50'
+                      }`}
+                    >
+                      <div className="col-span-3 flex items-center">
+                        <div className="font-medium text-gray-800">
+                          {candidate.firstname} {candidate.surname}
+                        </div>
+                      </div>
+                      
+                      <div className="col-span-3 flex items-center">
+                        <PartyBadge party={candidate.political_party} />
+                      </div>
+                      
+                      <div className="col-span-2 flex items-center">
+                        {hasExistingResult ? (
+                          <div className="flex flex-col">
+                            <span className="font-bold text-kweli-primary">{candidateResult.votes}</span>
+                            {maxVotes > 0 && (
+                              <div className="w-full mt-1 bg-gray-200 rounded-full h-1.5">
+                                <div 
+                                  className={`h-1.5 rounded-full ${
+                                    candidateResult.votes === maxVotes && maxVotes > 0
+                                      ? 'bg-gradient-to-r from-green-400 to-green-500' 
+                                      : 'bg-gradient-to-r from-blue-400 to-kweli-primary'
+                                  }`}
+                                  style={{ width: `${(candidateResult.votes / maxVotes) * 100}%` }}
+                                ></div>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 text-sm italic">No votes yet</span>
+                        )}
+                      </div>
+                      
+                      <div className="col-span-2">
+                        <input
+                          type="number"
+                          min="0"
+                          value={candidateVotes[candidateId]}
+                          onChange={(e) => handleVoteChange(candidateId, e.target.value)}
+                          className="w-full px-3 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-kweli-primary/50"
+                          placeholder="Votes"
+                        />
+                      </div>
+                      
+                      <div className="col-span-2">
+                        <button
+                          onClick={() => handleAddResult(candidate)}
+                          disabled={isSubmitting[candidateId]}
+                          className={`inline-flex items-center justify-center px-3 py-1.5 bg-gradient-to-r from-kweli-accent to-kweli-primary text-white text-sm font-medium rounded-md hover:shadow-md transition-all duration-200 ${
+                            isSubmitting[candidateId] ? 'opacity-70' : ''
+                          }`}
+                        >
+                          {isSubmitting[candidateId] ? (
+                            <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                          ) : (
+                            <>
+                              {hasExistingResult ? "Update" : "Add Result"}
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="h-2 bg-gray-100 rounded-b-lg border-x border-b border-gray-200 mb-6"></div>
+            </div>
+          );
+        })}
+        
+        {/* Summary section showing all results */}
+        {resultsList.length > 0 && (
+          <div className="mt-10 pt-6 border-t border-gray-200">
+            <h3 className="text-lg font-bold text-kweli-dark mb-4">Results Summary</h3>
+            <div className="overflow-x-auto">
+              <div className="inline-block min-w-full align-middle">
+                <div className="overflow-hidden border border-gray-200 rounded-lg shadow-soft-sm">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-100">
+                      <tr>
+                        <th scope="col" className="px-4 py-3.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                          Candidate
+                        </th>
+                        <th scope="col" className="px-4 py-3.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                          Position
+                        </th>
+                        <th scope="col" className="px-4 py-3.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                          Party
+                        </th>
+                        <th scope="col" className="px-4 py-3.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                          Polling Station
+                        </th>
+                        <th scope="col" className="px-4 py-3.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                          Votes
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {resultsList.map((result) => (
+                        <tr key={result.resultscount_id} className="hover:bg-gray-50 transition-colors duration-150">
+                          <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-kweli-dark">
+                            {`${result.candidate_details.firstname} ${result.candidate_details.surname}`}
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                            <span className="px-2 py-1 text-xs font-medium bg-blue-50 text-blue-700 rounded-full">
+                              {result.candidate_details.candidate_type}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                            <PartyBadge party={result.candidate_details.political_party} />
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                            {result.polling_station}
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm font-bold text-kweli-dark">
+                            {result.votes}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -458,6 +495,26 @@ const PartyBadge = ({ party }) => {
         return 'bg-orange-50 text-orange-700';
       case 'Party D':
         return 'bg-yellow-50 text-yellow-700';
+      case 'Green Party':
+        return 'bg-emerald-50 text-emerald-700';
+      case 'Jubilee Party':
+        return 'bg-red-50 text-red-700';
+      case 'NARC Kenya':
+        return 'bg-blue-50 text-blue-700';
+      case 'ODM':
+        return 'bg-orange-50 text-orange-700';
+      case 'UDA':
+        return 'bg-yellow-50 text-yellow-700';
+      case 'Independent':
+        return 'bg-gray-50 text-gray-700';
+      case 'Wiper Democratic Movement':
+        return 'bg-cyan-50 text-cyan-700';
+      case 'NARC':
+        return 'bg-indigo-50 text-indigo-700';
+      case 'Maendeleo Chap Chap':
+        return 'bg-teal-50 text-teal-700';
+      case 'Ford Kenya':
+        return 'bg-sky-50 text-sky-700';
       default:
         return 'bg-gray-50 text-gray-700';
     }
