@@ -28,7 +28,8 @@ from .views import (
     get_user_info,
     create_user,
     create_keyperson_with_user,
-    save_voter_biometric_template
+    save_voter_biometric_template,
+    save_keyperson_biometric_template
 )
 
 # Set up DRF router
@@ -54,6 +55,7 @@ urlpatterns = [
     path('api/users/', create_user, name='create_user'),
     path('api/keyperson-with-user/', create_keyperson_with_user, name='create_keyperson_with_user'),
     
-    # Biometric endpoint
+    # Biometric endpoints
     path('api/voters/<str:voter_id>/biometric-template/', save_voter_biometric_template, name='save_voter_biometric_template'),
+    path('api/keypersons/<str:keyperson_id>/biometric-template/', save_keyperson_biometric_template, name='save_keyperson_biometric_template'),
 ]

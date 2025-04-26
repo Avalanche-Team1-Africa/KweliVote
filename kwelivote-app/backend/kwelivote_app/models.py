@@ -40,6 +40,8 @@ class KeyPerson(models.Model):
     # Add optional biometric data fields
     biometric_data = models.BinaryField(blank=True, null=True)
     biometric_image = models.ImageField(upload_to='biometric_images/', blank=True, null=True)
+    biometric_template = models.JSONField(blank=True, null=True)
+    has_template = models.BooleanField(default=False)
     
     created_by = models.CharField(max_length=100)
     created_datetime = models.DateTimeField(default=timezone.now)

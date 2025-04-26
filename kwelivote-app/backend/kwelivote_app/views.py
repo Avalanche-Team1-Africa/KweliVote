@@ -295,6 +295,45 @@ def save_voter_biometric_template(request, voter_id):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def save_keyperson_biometric_template(request, keyperson_id):
+    """
+    Save the fingerprint template for a keyperson
+    """
+    try:
+        # Check if keyperson exists
+        try:
+            keyperson = KeyPerson.objects.get(nationalid=keyperson_id)
+        except KeyPerson.DoesNotExist:
+            return Response(
+                {'error': f'Keyperson with ID {keyperson_id} not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Validate request data
+        if not request.data or not request.data.get('template'):
+            return Response(
+                {'error': 'Fingerprint template data is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # Save the template to the keyperson record
+        template_data = request.data.get('template')
+        keyperson.biometric_template = template_data
+        keyperson.has_template = True
+        keyperson.save()
+        
+        return Response(
+            {'success': True, 'message': 'Biometric template saved successfully'},
+            status=status.HTTP_200_OK
+        )
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
 @api_view(['GET'])
 def api_root(request, format=None):
     """

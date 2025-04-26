@@ -222,6 +222,15 @@ export const keypersonAPI = {
     return authenticatedRequest(`${API_BASE_URL}/users/`, 'POST', data);
   },
 
+  // New method to save biometric template for keypersons
+  async saveBiometricTemplate(keypersonId, template) {
+    return authenticatedRequest(
+      `${API_BASE_URL}/keypersons/${keypersonId}/biometric-template/`, 
+      'POST', 
+      { template }
+    );
+  },
+
   // New transaction-based endpoint for creating both keyperson and user in a single operation
   async createKeypersonWithUser(data) {
     // This endpoint doesn't require authentication for keyperson registration
