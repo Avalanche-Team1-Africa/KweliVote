@@ -1,19 +1,36 @@
 import React, { useState } from 'react';
 import FingerprintEnrollment from '../voter/FingerprintEnrollment'; // Reuse the existing component
 
-const KeypersonStep2 = ({ formData, handleFileChange, nextStep, prevStep, isObserver, onEnrollmentComplete }) => {
+const KeypersonStep2 = ({ formData, handleFileChange, nextStep, prevStep, isObserver, onEnrollmentComplete, isEditMode, handleSubmit, error, successMessage, isSubmitting }) => {
   const [dragActive, setDragActive] = useState(false);
   const [useFingerPrintReader, setUseFingerPrintReader] = useState(false);
   const [fingerprintTemplate, setFingerprintTemplate] = useState(null);
   const [isDetectingFingerprint, setIsDetectingFingerprint] = useState(false);
+  const [showLocalSuccess, setShowLocalSuccess] = useState(false);
+  const [localSuccessMessage, setLocalSuccessMessage] = useState('');
+  const [localError, setLocalError] = useState('');
   
-  const handleNext = (e) => {
+  const handleNext = async (e) => {
     e.preventDefault();
     // Add fingerprint template to form data if available
     if (fingerprintTemplate && onEnrollmentComplete) {
       onEnrollmentComplete(fingerprintTemplate);
     }
-    nextStep();
+    
+    // If we're in edit mode or this is an observer, we should submit the form instead of going to next step
+    if (isEditMode || isObserver) {
+      if (handleSubmit) {
+        // Clear local states
+        setLocalError('');
+        setShowLocalSuccess(false);
+        // Submit the form directly using the parent's handleSubmit function
+        await handleSubmit(e);
+        // We don't need to set local success message here as it will be handled by the parent component
+      }
+    } else {
+      // Otherwise proceed to the next step as usual
+      nextStep();
+    }
   };
   
   const handlePrev = (e) => {
@@ -179,6 +196,31 @@ const KeypersonStep2 = ({ formData, handleFileChange, nextStep, prevStep, isObse
   return (
     <div className="space-y-8 animate-fade-in">
       <div className="p-5 bg-gradient-to-r from-gray-50 to-kweli-light border border-gray-100 rounded-lg shadow-soft-sm">
+        {/* Show success message if available */}
+        {(showLocalSuccess || successMessage) && (
+          <div className="mb-6 bg-green-50 border-l-4 border-green-500 text-green-700 p-4 rounded-md shadow-soft-sm animate-fade-in">
+            <div className="flex items-center">
+              <svg className="h-5 w-5 mr-2 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>{successMessage || localSuccessMessage || 'Operation successful!'}</span>
+              {fingerprintTemplate && <span className="ml-1">Biometric enrollment completed.</span>}
+            </div>
+          </div>
+        )}
+        
+        {/* Show error message if available */}
+        {(localError || error) && (
+          <div className="mb-6 bg-red-50 border-l-4 border-red-400 text-red-700 p-4 rounded-md shadow-soft-sm animate-fade-in" role="alert">
+            <div className="flex items-center">
+              <svg className="h-5 w-5 mr-2 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>{error || localError}</span>
+            </div>
+          </div>
+        )}
+        
         <div className="flex items-center mb-4">
           <div className="h-8 w-8 bg-kweli-primary/10 rounded-full flex items-center justify-center mr-3">
             <svg className="h-4 w-4 text-kweli-primary" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -354,22 +396,21 @@ const KeypersonStep2 = ({ formData, handleFileChange, nextStep, prevStep, isObse
         <button
           type="button"
           onClick={handleNext}
-          className="flex items-center bg-gradient-to-r from-kweli-accent to-kweli-primary text-white font-medium py-2.5 px-6 rounded-lg shadow-soft hover:shadow-soft-md transition-all duration-300 transform hover:-translate-y-0.5"
+          disabled={isSubmitting}
+          className={`flex items-center bg-gradient-to-r from-kweli-accent to-kweli-primary text-white font-medium py-2.5 px-6 rounded-lg shadow-soft hover:shadow-soft-md transition-all duration-300 transform hover:-translate-y-0.5 ${
+            isSubmitting ? 'opacity-70 cursor-not-allowed' : ''
+          }`}
         >
-          {isObserver ? (
-            <>
-              Submit
-              <svg className="ml-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+          {isSubmitting ? (
+            <div className="flex items-center">
+              <svg className="animate-spin h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-            </>
+              Processing...
+            </div>
           ) : (
-            <>
-              Next Step
-              <svg className="ml-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
-            </>
+            isEditMode || isObserver ? 'Submit' : 'Next'
           )}
         </button>
       </div>

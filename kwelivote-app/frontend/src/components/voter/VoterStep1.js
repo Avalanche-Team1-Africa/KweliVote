@@ -1,6 +1,6 @@
 import React from 'react';
 
-const VoterStep1 = ({ formData, handleInputChange, nextStep }) => {
+const VoterStep1 = ({ formData, handleInputChange, nextStep, isEditMode }) => {
   const handleNext = (e) => {
     e.preventDefault();
     nextStep();
@@ -26,7 +26,14 @@ const VoterStep1 = ({ formData, handleInputChange, nextStep }) => {
               required
               placeholder="Enter National ID"
               className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-kweli-primary/50 focus:border-kweli-primary/50 transition-colors duration-200"
+              readOnly={isEditMode} // Make National ID read-only in edit mode
+              disabled={isEditMode}
             />
+            {isEditMode && (
+              <div className="mt-1 text-xs text-gray-500">
+                National ID cannot be changed
+              </div>
+            )}
           </div>
         </div>
         

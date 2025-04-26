@@ -192,6 +192,23 @@ export const voterAPI = {
       'POST', 
       { template }
     );
+  },
+  
+  // New method to search voters by name or national ID
+  async searchVoters(searchTerm) {
+    // Get all voters and filter on the client-side
+    // In a production app, you'd want to implement server-side filtering
+    const voters = await authenticatedRequest(`${API_BASE_URL}/voters/`);
+    
+    if (!searchTerm) return [];
+    
+    searchTerm = searchTerm.toLowerCase();
+    return voters.filter(voter => 
+      voter.nationalid.toLowerCase().includes(searchTerm) ||
+      voter.firstname.toLowerCase().includes(searchTerm) ||
+      voter.surname.toLowerCase().includes(searchTerm) ||
+      (voter.middlename && voter.middlename.toLowerCase().includes(searchTerm))
+    );
   }
 };
 
@@ -252,6 +269,24 @@ export const keypersonAPI = {
     } catch (error) {
       throw handleApiError(error);
     }
+  },
+  
+  // New method to search keypersons by name or national ID
+  async searchKeypersons(searchTerm) {
+    // Get all keypersons and filter on the client-side
+    // In a production app, you'd want to implement server-side filtering
+    const keypersons = await authenticatedRequest(`${API_BASE_URL}/keypersons/`);
+    
+    if (!searchTerm) return [];
+    
+    searchTerm = searchTerm.toLowerCase();
+    return keypersons.filter(keyperson => 
+      keyperson.nationalid.toLowerCase().includes(searchTerm) ||
+      keyperson.firstname.toLowerCase().includes(searchTerm) ||
+      keyperson.surname.toLowerCase().includes(searchTerm) ||
+      (keyperson.middlename && keyperson.middlename.toLowerCase().includes(searchTerm)) ||
+      (keyperson.role && keyperson.role.toLowerCase().includes(searchTerm))
+    );
   }
 };
 

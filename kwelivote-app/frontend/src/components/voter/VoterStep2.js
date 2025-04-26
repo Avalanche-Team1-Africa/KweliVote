@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import FingerprintEnrollment from './FingerprintEnrollment';
 
-const VoterStep2 = ({ formData, handleFileChange, prevStep, handleSubmit, isSubmitting = false, onEnrollmentComplete }) => {
+const VoterStep2 = ({ formData, handleFileChange, prevStep, handleSubmit, isSubmitting = false, onEnrollmentComplete, isEditMode }) => {
   const [dragActive, setDragActive] = useState(false);
   const [useFingerPrintReader, setUseFingerPrintReader] = useState(false);
   const [fingerprintTemplate, setFingerprintTemplate] = useState(null);
@@ -190,7 +190,9 @@ const VoterStep2 = ({ formData, handleFileChange, prevStep, handleSubmit, isSubm
         </div>
         
         <p className="text-gray-600 mb-6 text-sm">
-          Biometric data is optional and can be left blank. You can either use the fingerprint reader or upload existing biometric data files.
+          {isEditMode 
+            ? 'Update biometric data if needed or skip this step to keep existing biometric data.' 
+            : 'Biometric data is optional and can be left blank. You can either use the fingerprint reader or upload existing biometric data files.'}
         </p>
         
         {/* Biometric collection method toggle */}
@@ -338,6 +340,19 @@ const VoterStep2 = ({ formData, handleFileChange, prevStep, handleSubmit, isSubm
             </div>
           </div>
         )}
+        
+        {isEditMode && (
+          <div className="mt-6 p-4 bg-blue-50 rounded-md border border-blue-100">
+            <div className="flex items-center">
+              <svg className="h-6 w-6 text-blue-500 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-sm text-blue-700">
+                <span className="font-medium">Note:</span> Updating biometrics will replace any existing biometric data for this voter. If you don't upload new biometrics, existing data will be preserved.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
       
       <div className="pt-5 flex justify-between">
@@ -369,7 +384,7 @@ const VoterStep2 = ({ formData, handleFileChange, prevStep, handleSubmit, isSubm
             </>
           ) : (
             <>
-              Submit
+              {isEditMode ? 'Update Voter' : 'Submit'}
               <svg className="ml-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
               </svg>
