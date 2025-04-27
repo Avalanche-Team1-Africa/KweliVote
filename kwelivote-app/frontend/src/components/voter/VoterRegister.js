@@ -20,6 +20,8 @@ const VoterRegister = () => {
   
   // Store fingerprint template separately since it's a complex object
   const [fingerprintTemplate, setFingerprintTemplate] = useState(null);
+  // Store generated DID information
+  const [didInfo, setDidInfo] = useState(null);
   const [showSuccess, setShowSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -51,8 +53,13 @@ const VoterRegister = () => {
     }
   };
   
-  const handleFingerprintEnrollment = (templateData) => {
+  const handleFingerprintEnrollment = (templateData, didResult = null) => {
     setFingerprintTemplate(templateData);
+    
+    // Store DID information if provided (from biometric-to-DID conversion)
+    if (didResult) {
+      setDidInfo(didResult);
+    }
   };
   
   const nextStep = () => {
@@ -136,6 +143,7 @@ const VoterRegister = () => {
       biometricImage: null,
     });
     setFingerprintTemplate(null);
+    setDidInfo(null);
     setIsEditMode(false);
     setEditingVoterId(null);
     setCurrentStep(1);
@@ -161,8 +169,23 @@ const VoterRegister = () => {
       };
       
       if (!isEditMode) {
-        // For new voters, generate a DID and set has_template
-        voterData.did = `did:example:${formData.nationalid}`; // Generate a basic DID based on the national ID
+        // For new voters, use the DID generated from the biometric data if available
+        if (didInfo && didInfo.didKey) {
+          console.log('Using biometrically-generated DID:', didInfo.didKey);
+          voterData.did = didInfo.didKey;
+          
+          // Optionally store the public key in a safe place - production systems would use a secure key management service
+          console.log('Public key:', didInfo.publicKey);
+          
+          // IMPORTANT: In a production system, the private key would be managed differently
+          // For demonstration purposes only, we're logging it here
+          console.log('SECURE INFO - Private key (should be stored securely):', didInfo.privateKey);
+        } else {
+          // Fallback to a basic DID if no biometric-based DID is available
+          voterData.did = `did:example:${formData.nationalid}`;
+          console.log('Using fallback DID:', voterData.did);
+        }
+        
         voterData.has_template = fingerprintTemplate !== null;
         
         // Create the voter
@@ -184,11 +207,17 @@ const VoterRegister = () => {
           }
         }
         
-        setSuccessMessage('Voter registered successfully!');
+        setSuccessMessage('Voter registered successfully with blockchain identity!');
       } else {
         // For existing voters, update the record
-        // IMPORTANT: Include DID when updating - it's a required field
-        voterData.did = formData.did || `did:example:${formData.nationalid}`;
+        // If we have a new biometrically generated DID, use it to update
+        if (didInfo && didInfo.didKey) {
+          voterData.did = didInfo.didKey;
+          console.log('Updating with new biometrically-generated DID:', didInfo.didKey);
+        } else {
+          // Otherwise keep the existing DID or use a fallback
+          voterData.did = formData.did || `did:example:${formData.nationalid}`;
+        }
         
         const updatedVoter = await voterAPI.updateVoter(editingVoterId, voterData);
         console.log('Voter updated:', updatedVoter);
@@ -206,7 +235,7 @@ const VoterRegister = () => {
           }
         }
         
-        setSuccessMessage('Voter updated successfully!');
+        setSuccessMessage('Voter updated successfully with blockchain identity!');
         
         // Reset edit mode after successful update
         setIsEditMode(false);
@@ -228,6 +257,7 @@ const VoterRegister = () => {
           biometricImage: null,
         });
         setFingerprintTemplate(null);
+        setDidInfo(null);
         setCurrentStep(1);
         setShowSuccess(false);
       }, 3000);
@@ -389,7 +419,13 @@ const VoterRegister = () => {
               </svg>
               <span>{successMessage}</span>
               {fingerprintTemplate && <span className="ml-1">Biometric enrollment completed.</span>}
+              {didInfo && <span className="ml-1">Blockchain identity created.</span>}
             </div>
+            {didInfo && (
+              <div className="mt-2 text-sm font-mono text-green-900 bg-green-100 p-2 rounded border border-green-200">
+                DID: {didInfo.didKey}
+              </div>
+            )}
           </div>
         )}
         
@@ -473,7 +509,12 @@ const VoterRegister = () => {
               prevStep={prevStep}
               handleSubmit={handleSubmit}
               isSubmitting={isSubmitting}
-              onEnrollmentComplete={handleFingerprintEnrollment}
+              onEnrollmentComplete={(templateData) => {
+                handleFingerprintEnrollment(templateData);
+              }}
+              onDIDGenerated={(didResult) => {
+                setDidInfo(didResult);
+              }}
               isEditMode={isEditMode}
             />
           )}
