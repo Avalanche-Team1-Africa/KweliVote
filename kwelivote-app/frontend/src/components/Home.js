@@ -64,6 +64,11 @@ const Home = () => {
     navigate('/login');
   };
 
+  // Handle blockchain admin navigation
+  const navigateToBlockchainAdmin = () => {
+    navigate('/blockchain-admin');
+  };
+
   return (
     <div className="max-w-4xl mx-auto animate-slide-up">
       <div className="text-center mb-10">
@@ -78,6 +83,36 @@ const Home = () => {
         <p className="text-gray-600 text-lg max-w-xl mx-auto">
           A secure and transparent electronic voting system. Please select your role to continue:
         </p>
+      </div>
+
+      {/* Blockchain Admin Button - Prominent placement above roles */}
+      <div className="mb-8">
+        <div 
+          onClick={navigateToBlockchainAdmin}
+          className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl shadow-soft-lg hover:shadow-soft-xl border border-blue-100 p-6 transition-all duration-300 transform hover:-translate-y-1 cursor-pointer"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <div className="flex items-center justify-center rounded-full bg-white bg-opacity-20 h-16 w-16 mr-4">
+                <svg className="h-8 w-8 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="font-bold text-white text-xl mb-1">Blockchain Admin Setup</h3>
+                <p className="text-blue-100">Configure and verify voter DIDs on the Avalanche blockchain</p>
+              </div>
+            </div>
+            <div>
+              <button className="bg-white text-blue-600 font-medium py-2 px-6 rounded-lg hover:bg-blue-50 transition-colors duration-200 flex items-center shadow-soft-sm">
+                Access
+                <svg className="ml-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">

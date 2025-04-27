@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import VoterStep1 from './VoterStep1';
 import VoterStep2 from './VoterStep2';
 import { voterAPI } from '../../utils/api';
+import blockchainService from '../../services/BlockchainService';
 
 const VoterRegister = () => {
   const [currentStep, setCurrentStep] = useState(1);
@@ -25,7 +26,11 @@ const VoterRegister = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [successMessage, setSuccessMessage] = useState(''); 
+  const [successMessage, setSuccessMessage] = useState('');
+  const [blockchainStatus, setBlockchainStatus] = useState({
+    initialized: false,
+    message: 'Not connected to blockchain'
+  });
   
   // Search-related states
   const [searchTerm, setSearchTerm] = useState('');
@@ -35,6 +40,29 @@ const VoterRegister = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingVoterId, setEditingVoterId] = useState(null);
   
+  // Initialize blockchain service when component mounts
+  useEffect(() => {
+    const initBlockchain = async () => {
+      try {
+        const isInitialized = await blockchainService.initialize();
+        setBlockchainStatus({
+          initialized: isInitialized,
+          message: isInitialized 
+            ? 'Connected to Avalanche blockchain' 
+            : 'Blockchain not configured. Admin setup required.'
+        });
+      } catch (err) {
+        console.error('Failed to initialize blockchain service:', err);
+        setBlockchainStatus({
+          initialized: false,
+          message: `Blockchain initialization error: ${err.message}`
+        });
+      }
+    };
+    
+    initBlockchain();
+  }, []);
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData({
@@ -168,11 +196,16 @@ const VoterRegister = () => {
         created_by: userInfo.username || 'system', // Use the logged-in username or default to 'system'
       };
       
+      // Track blockchain transaction status
+      let blockchainTxHash = null;
+      let voterDID = '';
+      
       if (!isEditMode) {
         // For new voters, use the DID generated from the biometric data if available
         if (didInfo && didInfo.didKey) {
           console.log('Using biometrically-generated DID:', didInfo.didKey);
           voterData.did = didInfo.didKey;
+          voterDID = didInfo.didKey;
           
           // Optionally store the public key in a safe place - production systems would use a secure key management service
           console.log('Public key:', didInfo.publicKey);
@@ -180,9 +213,36 @@ const VoterRegister = () => {
           // IMPORTANT: In a production system, the private key would be managed differently
           // For demonstration purposes only, we're logging it here
           console.log('SECURE INFO - Private key (should be stored securely):', didInfo.privateKey);
+          
+          // Store DID on Avalanche blockchain if service is initialized
+          if (blockchainStatus.initialized) {
+            try {
+              console.log('Storing voter DID on Avalanche blockchain...');
+              const blockchainResult = await blockchainService.registerVoterDID(
+                didInfo.didKey, 
+                formData.nationalid
+              );
+              
+              if (blockchainResult.success) {
+                console.log('DID registered on blockchain successfully!');
+                blockchainTxHash = blockchainResult.transactionHash;
+                
+                // Add blockchain transaction ID to voter data
+                voterData.blockchain_tx_id = blockchainTxHash;
+              } else {
+                console.error('Failed to register DID on blockchain:', blockchainResult.error);
+              }
+            } catch (blockchainError) {
+              console.error('Blockchain error:', blockchainError);
+              // Continue with database registration even if blockchain fails
+            }
+          } else {
+            console.log('Blockchain not initialized. DID will only be stored in database.');
+          }
         } else {
           // Fallback to a basic DID if no biometric-based DID is available
           voterData.did = `did:example:${formData.nationalid}`;
+          voterDID = voterData.did;
           console.log('Using fallback DID:', voterData.did);
         }
         
@@ -207,16 +267,46 @@ const VoterRegister = () => {
           }
         }
         
-        setSuccessMessage('Voter registered successfully with blockchain identity!');
+        setSuccessMessage(
+          blockchainTxHash 
+            ? `Voter registered successfully! DID stored on Avalanche blockchain (tx: ${blockchainTxHash.substring(0, 10)}...)`
+            : 'Voter registered successfully with blockchain identity!'
+        );
       } else {
         // For existing voters, update the record
         // If we have a new biometrically generated DID, use it to update
         if (didInfo && didInfo.didKey) {
           voterData.did = didInfo.didKey;
+          voterDID = didInfo.didKey;
           console.log('Updating with new biometrically-generated DID:', didInfo.didKey);
+          
+          // Update DID on blockchain if service is initialized
+          if (blockchainStatus.initialized) {
+            try {
+              console.log('Updating voter DID on Avalanche blockchain...');
+              const blockchainResult = await blockchainService.registerVoterDID(
+                didInfo.didKey, 
+                formData.nationalid
+              );
+              
+              if (blockchainResult.success) {
+                console.log('DID updated on blockchain successfully!');
+                blockchainTxHash = blockchainResult.transactionHash;
+                
+                // Add blockchain transaction ID to voter data
+                voterData.blockchain_tx_id = blockchainTxHash;
+              } else {
+                console.error('Failed to update DID on blockchain:', blockchainResult.error);
+              }
+            } catch (blockchainError) {
+              console.error('Blockchain error:', blockchainError);
+              // Continue with database update even if blockchain fails
+            }
+          }
         } else {
           // Otherwise keep the existing DID or use a fallback
           voterData.did = formData.did || `did:example:${formData.nationalid}`;
+          voterDID = voterData.did;
         }
         
         const updatedVoter = await voterAPI.updateVoter(editingVoterId, voterData);
@@ -234,7 +324,8 @@ const VoterRegister = () => {
                   biometric_template: fingerprintTemplate,
                   did: didInfo.didKey,
                   privateKey: didInfo.privateKey,
-                  publicKey: didInfo.publicKey
+                  publicKey: didInfo.publicKey,
+                  blockchain_tx_id: blockchainTxHash
                 }
               );
               console.log('All biometric and blockchain data updated:', biometricDidResult);
@@ -251,7 +342,11 @@ const VoterRegister = () => {
           }
         }
         
-        setSuccessMessage('Voter updated successfully with blockchain identity!');
+        setSuccessMessage(
+          blockchainTxHash 
+            ? `Voter updated successfully! DID updated on Avalanche blockchain (tx: ${blockchainTxHash.substring(0, 10)}...)`
+            : 'Voter updated successfully with blockchain identity!'
+        );
         
         // Reset edit mode after successful update
         setIsEditMode(false);
@@ -276,7 +371,7 @@ const VoterRegister = () => {
         setDidInfo(null);
         setCurrentStep(1);
         setShowSuccess(false);
-      }, 3000);
+      }, 5000);
     } catch (error) {
       console.error(isEditMode ? 'Error updating voter:' : 'Error registering voter:', error);
       setError(error.message || `Failed to ${isEditMode ? 'update' : 'register'} voter. Please try again.`);
@@ -427,114 +522,62 @@ const VoterRegister = () => {
           </div>
         )}
         
-        {showSuccess && (
-          <div className="mb-6 bg-green-50 border-l-4 border-green-500 text-green-700 p-4 rounded-md shadow-soft-sm animate-fade-in">
-            <div className="flex items-center">
-              <svg className="h-5 w-5 mr-2 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span>{successMessage}</span>
-              {fingerprintTemplate && <span className="ml-1">Biometric enrollment completed.</span>}
-              {didInfo && <span className="ml-1">Blockchain identity created.</span>}
-            </div>
-            {didInfo && (
-              <div className="mt-2 text-sm font-mono text-green-900 bg-green-100 p-2 rounded border border-green-200">
-                DID: {didInfo.didKey}
-              </div>
-            )}
-          </div>
-        )}
-        
-        {error && (
-          <div className="mb-6 bg-red-50 border-l-4 border-red-400 text-red-700 p-4 rounded-md shadow-soft-sm animate-fade-in" role="alert">
-            <div className="flex items-center">
-              <svg className="h-5 w-5 mr-2 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span>{error}</span>
-            </div>
-          </div>
-        )}
-        
-        {/* Edit mode indicator */}
-        {isEditMode && (
-          <div className="mb-6 bg-blue-50 border-l-4 border-blue-400 text-blue-700 p-4 rounded-md shadow-soft-sm">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <svg className="h-5 w-5 mr-2 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                </svg>
-                <span>Editing Voter: <strong>{formData.firstname} {formData.surname}</strong> (ID: {editingVoterId})</span>
-              </div>
-              <button
-                type="button"
-                onClick={cancelEdit}
-                className="text-sm bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 py-1 rounded-md"
-              >
-                Cancel Edit
-              </button>
-            </div>
-          </div>
-        )}
-        
-        <div className="mb-10">
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="h-1 w-full bg-gray-200 rounded"></div>
-            </div>
-            <div className="relative flex justify-between">
-              {steps.map((step) => (
-                <div 
-                  key={step.number} 
-                  className="flex flex-col items-center"
-                >
-                  <div 
-                    className={`h-8 w-8 flex items-center justify-center rounded-full ${
-                      step.status === 'active' 
-                        ? 'bg-kweli-primary text-white'
-                        : 'bg-gray-200 text-gray-500'
-                    } font-medium transition-colors duration-200`}
-                  >
-                    {step.number}
-                  </div>
-                  <div className={`mt-2 text-xs font-medium ${
-                    step.status === 'active' ? 'text-kweli-primary' : 'text-gray-500'
-                  }`}>
-                    {step.name}
-                  </div>
+        {/* Form steps */}
+        <div className="mb-8">
+          <div className="flex justify-between items-center mb-6">
+            {steps.map((step) => (
+              <div key={step.number} className={`flex-1 text-center ${step.status === 'active' ? 'text-kweli-primary' : 'text-gray-400'}`}>
+                <div className={`w-8 h-8 mx-auto rounded-full flex items-center justify-center border-2 ${step.status === 'active' ? 'border-kweli-primary' : 'border-gray-300'}`}>
+                  {step.number}
                 </div>
-              ))}
-            </div>
+                <p className="mt-2 text-sm">{step.name}</p>
+              </div>
+            ))}
           </div>
         </div>
         
-        <form onSubmit={handleSubmit} className="transition-all duration-300">
-          {currentStep === 1 && (
-            <VoterStep1
-              formData={formData}
-              handleInputChange={handleInputChange}
-              nextStep={nextStep}
-              isEditMode={isEditMode}
-            />
-          )}
-          
-          {currentStep === 2 && (
-            <VoterStep2
-              formData={formData}
-              handleFileChange={handleFileChange}
-              prevStep={prevStep}
-              handleSubmit={handleSubmit}
-              isSubmitting={isSubmitting}
-              onEnrollmentComplete={(templateData) => {
-                handleFingerprintEnrollment(templateData);
-              }}
-              onDIDGenerated={(didResult) => {
-                setDidInfo(didResult);
-              }}
-              isEditMode={isEditMode}
-            />
-          )}
-        </form>
+        {/* Step content */}
+        {currentStep === 1 && (
+          <VoterStep1
+            formData={formData}
+            handleInputChange={handleInputChange}
+            nextStep={nextStep}
+          />
+        )}
+        {currentStep === 2 && (
+          <VoterStep2
+            formData={formData}
+            handleFileChange={handleFileChange}
+            handleFingerprintEnrollment={handleFingerprintEnrollment}
+            prevStep={prevStep}
+            handleSubmit={handleSubmit}
+            isSubmitting={isSubmitting}
+          />
+        )}
+        
+        {/* Error message */}
+        {error && (
+          <div className="mt-4 bg-red-50 border-l-4 border-red-400 p-4 rounded-md">
+            <div className="flex items-center">
+              <svg className="h-5 w-5 text-red-400 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2h-1V9a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          </div>
+        )}
+        
+        {/* Success message */}
+        {showSuccess && (
+          <div className="mt-4 bg-green-50 border-l-4 border-green-400 p-4 rounded-md">
+            <div className="flex items-center">
+              <svg className="h-5 w-5 text-green-400 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2h-1V9a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              <p className="text-sm text-green-700">{successMessage}</p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

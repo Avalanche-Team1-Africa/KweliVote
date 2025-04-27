@@ -84,6 +84,10 @@ class Voter(models.Model):
     biometric_template = models.JSONField(blank=True, null=True)
     has_template = models.BooleanField(default=False)
     
+    # Blockchain fields
+    blockchain_tx_id = models.CharField(max_length=255, blank=True, null=True)
+    blockchain_subnet_id = models.CharField(max_length=255, blank=True, null=True)
+    
     created_by = models.CharField(max_length=100)
     created_datetime = models.DateTimeField(default=timezone.now)
 

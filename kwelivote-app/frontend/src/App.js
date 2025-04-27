@@ -13,6 +13,11 @@ import VoterRegister from './components/voter/VoterRegister';
 import DataViewer from './components/viewer/DataViewer';
 import ResultsCount from './components/results/ResultsCount';
 
+// Import blockchain admin components
+import BlockchainSetup from './components/admin/BlockchainSetup';
+import BlockchainExplorer from './components/admin/BlockchainExplorer';
+import BlockchainAdmin from './components/admin/BlockchainAdmin';
+
 // Header component with persistent user info and logout
 const Header = () => {
   const [menuOpen, setMenuOpen] = React.useState(false);
@@ -61,6 +66,17 @@ const Header = () => {
           {/* Right - Desktop navigation with logout */}
           {isAuthenticated && (
             <nav className="hidden md:block">
+              {currentUser.role === 'IEBC Constituency Election Coordinators (CECs)' && (
+                <div className="flex items-center space-x-4">
+                  <Link to="/blockchain-setup" className="text-kweli-primary hover:text-kweli-primary-dark">
+                    Blockchain Setup
+                  </Link>
+                  <Link to="/blockchain-explorer" className="text-kweli-primary hover:text-kweli-primary-dark">
+                    DID Verifier
+                  </Link>
+                  <span className="border-l border-gray-300 h-6"></span>
+                </div>
+              )}
               <Logout />
             </nav>
           )}
@@ -78,6 +94,15 @@ const Header = () => {
                   {currentUser.role || "User"}
                 </span>
               </li>
+              {currentUser.role === 'IEBC Constituency Election Coordinators (CECs)' && (
+                <>
+                  <li onClick={() => setMenuOpen(false)}>
+                    <Link to="/blockchain-admin" className="block py-2 px-4 bg-gray-50 rounded-lg hover:bg-gray-100">
+                      Blockchain Admin
+                    </Link>
+                  </li>
+                </>
+              )}
               <li onClick={() => setMenuOpen(false)}>
                 <Logout />
               </li>
@@ -100,6 +125,9 @@ function App() {
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/login" element={<Login />} />
+              
+              {/* Blockchain Admin route - no authentication required (for demo) */}
+              <Route path="/blockchain-admin" element={<BlockchainAdmin />} />
               
               {/* Protected routes for each role */}
               <Route 
