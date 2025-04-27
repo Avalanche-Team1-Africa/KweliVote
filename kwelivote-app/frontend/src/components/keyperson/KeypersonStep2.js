@@ -1,23 +1,95 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import FingerprintEnrollment from '../voter/FingerprintEnrollment'; // Reuse the existing component
+import biometricToDID from '../../utils/biometricToDID';
 
-const KeypersonStep2 = ({ formData, handleFileChange, nextStep, prevStep, isObserver, onEnrollmentComplete, isEditMode, handleSubmit, error, successMessage, isSubmitting }) => {
+const KeypersonStep2 = ({ formData, handleFileChange, nextStep, prevStep, isObserver, onEnrollmentComplete, isEditMode, handleSubmit, error, successMessage, isSubmitting, showSuccess }) => {
   const [dragActive, setDragActive] = useState(false);
   const [useFingerPrintReader, setUseFingerPrintReader] = useState(false);
   const [fingerprintTemplate, setFingerprintTemplate] = useState(null);
   const [isDetectingFingerprint, setIsDetectingFingerprint] = useState(false);
   const [showLocalSuccess, setShowLocalSuccess] = useState(false);
-  const [localSuccessMessage, setLocalSuccessMessage] = useState('');
+  const [localSuccessMessage] = useState('');
   const [localError, setLocalError] = useState('');
-  
+  const [localFingerprintError, setLocalFingerprintError] = useState('');
+  const [didResult, setDidResult] = useState(null);
+  const [conversionLog, setConversionLog] = useState([]);
+  const [showConversionDetails, setShowConversionDetails] = useState(false);
+  const [currentStep, setCurrentStep] = useState(null);
+
+  const workflowSteps = [
+    { id: 'fingerprint', label: 'Fingerprint' },
+    { id: 'template', label: 'Template' },
+    { id: 'stabilization', label: 'Stabilization' },
+    { id: 'secretKey', label: 'Secret Key' },
+    { id: 'hash', label: 'Hash' },
+    { id: 'keyPair', label: 'Key Pair' },
+    { id: 'did', label: 'DID:key' }
+  ];
+
+  // Generate a color for each step in the workflow
+  const getStepColorClass = (stepId) => {
+    if (!currentStep) return 'bg-gray-200 text-gray-500';
+    if (stepId === currentStep) return 'bg-blue-500 text-white';
+    if (currentStep === 'did' || 
+        (workflowSteps.findIndex(s => s.id === stepId) < workflowSteps.findIndex(s => s.id === currentStep))) {
+      return 'bg-green-500 text-white';
+    }
+    return 'bg-gray-200 text-gray-500';
+  };
+
+  // Process fingerprint to DID when template is available
+  useEffect(() => {
+    if (fingerprintTemplate && formData.nationalid) {
+      try {
+        setConversionLog([]);
+        setCurrentStep('fingerprint');
+        setLocalFingerprintError(''); // Clear any previous errors
+
+        const originalConsoleLog = console.log;
+        console.log = (message) => {
+          originalConsoleLog(message);
+          if (typeof message === 'string') {
+            if (message.includes("STEP 1")) setCurrentStep('template');
+            else if (message.includes("STEP 2")) setCurrentStep('stabilization');
+            else if (message.includes("STEP 3")) setCurrentStep('secretKey');
+            else if (message.includes("STEP 4")) setCurrentStep('hash');
+            else if (message.includes("STEP 5")) setCurrentStep('keyPair');
+            else if (message.includes("STEP 7")) setCurrentStep('did');
+
+            setConversionLog(prevLogs => [...prevLogs, message]);
+          }
+        };
+
+        // Generate DID from the fingerprint template
+        const result = biometricToDID(fingerprintTemplate, formData.nationalid);
+        setDidResult(result);
+
+        // Reset console.log to original function
+        console.log = originalConsoleLog;
+      } catch (error) {
+        console.error('Error during biometric to DID conversion:', error);
+        setConversionLog(prevLogs => [...prevLogs, `Error: ${error.message}`]);
+        setLocalFingerprintError(`Error during biometric to DID conversion: ${error.message}`);
+      }
+    }
+  }, [fingerprintTemplate, formData.nationalid]);
+
   const handleNext = async (e) => {
     e.preventDefault();
-    // Add fingerprint template to form data if available
+    // Add fingerprint template and DID to form data if available
     if (fingerprintTemplate && onEnrollmentComplete) {
-      onEnrollmentComplete(fingerprintTemplate);
+      // Pass both the template and DID information (if available)
+      const templateWithDID = didResult ? { 
+        template: fingerprintTemplate,
+        did: didResult.didKey,
+        privateKey: didResult.privateKey,
+        publicKey: didResult.publicKey
+      } : fingerprintTemplate;
+      
+      onEnrollmentComplete(templateWithDID);
     }
     
-    // If we're in edit mode or this is an observer, we should submit the form instead of going to next step
+    // If we're in edit mode or this is an observer, we should submit the form directly
     if (isEditMode || isObserver) {
       if (handleSubmit) {
         // Clear local states
@@ -78,6 +150,7 @@ const KeypersonStep2 = ({ formData, handleFileChange, nextStep, prevStep, isObse
     }
     
     setIsDetectingFingerprint(true);
+    setLocalFingerprintError(''); // Clear previous errors
     
     try {
       // Read the file as data URL
@@ -138,6 +211,7 @@ const KeypersonStep2 = ({ formData, handleFileChange, nextStep, prevStep, isObse
           } else {
             console.log('Not a fingerprint or low-quality fingerprint');
             setIsDetectingFingerprint(false);
+            setLocalFingerprintError('The uploaded image does not appear to be a valid fingerprint or is of low quality. Please upload a clearer fingerprint image.');
           }
         };
         
@@ -148,6 +222,7 @@ const KeypersonStep2 = ({ formData, handleFileChange, nextStep, prevStep, isObse
     } catch (error) {
       console.error('Error detecting fingerprint:', error);
       setIsDetectingFingerprint(false);
+      setLocalFingerprintError(`Error analyzing fingerprint: ${error.message}`);
     }
   };
   
@@ -179,9 +254,10 @@ const KeypersonStep2 = ({ formData, handleFileChange, nextStep, prevStep, isObse
         
         // Set the template and notify parent component
         setFingerprintTemplate(template);
-        if (onEnrollmentComplete) {
-          onEnrollmentComplete(template);
-        }
+        
+        // Note: We don't need to call onEnrollmentComplete here
+        // The useEffect that watches fingerprintTemplate will trigger the DID generation
+        // and setDidResult, which will then be passed to the parent via onEnrollmentComplete in handleNext
         
         setIsDetectingFingerprint(false);
       };
@@ -197,7 +273,7 @@ const KeypersonStep2 = ({ formData, handleFileChange, nextStep, prevStep, isObse
     <div className="space-y-8 animate-fade-in">
       <div className="p-5 bg-gradient-to-r from-gray-50 to-kweli-light border border-gray-100 rounded-lg shadow-soft-sm">
         {/* Show success message if available */}
-        {(showLocalSuccess || successMessage) && (
+        {(showLocalSuccess || (successMessage && showSuccess)) && (
           <div className="mb-6 bg-green-50 border-l-4 border-green-500 text-green-700 p-4 rounded-md shadow-soft-sm animate-fade-in">
             <div className="flex items-center">
               <svg className="h-5 w-5 mr-2 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -210,13 +286,13 @@ const KeypersonStep2 = ({ formData, handleFileChange, nextStep, prevStep, isObse
         )}
         
         {/* Show error message if available */}
-        {(localError || error) && (
+        {(localError || error || localFingerprintError) && (
           <div className="mb-6 bg-red-50 border-l-4 border-red-400 text-red-700 p-4 rounded-md shadow-soft-sm animate-fade-in" role="alert">
             <div className="flex items-center">
               <svg className="h-5 w-5 mr-2 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span>{error || localError}</span>
+              <span>{error || localError || localFingerprintError}</span>
             </div>
           </div>
         )}
@@ -265,117 +341,239 @@ const KeypersonStep2 = ({ formData, handleFileChange, nextStep, prevStep, isObse
             onEnrollmentComplete={handleEnrollmentComplete}
           />
         ) : (
-          <div className="space-y-6">
-            <div className="space-y-2">
-              <label htmlFor="biometricImage" className="block text-sm font-medium text-gray-700">
-                Fingerprint Image (optional)
-              </label>
-              <div 
-                className={`relative border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-                  dragActive ? 'border-kweli-primary bg-kweli-primary/5' : 'border-gray-300 bg-gray-50'
-                }`}
-                onDragEnter={handleDrag}
-                onDragOver={handleDrag}
-                onDragLeave={handleDrag}
-              >
-                <div className="flex flex-col items-center">
-                  <svg className="mx-auto h-12 w-12 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                  <div className="mt-2 text-sm text-gray-600">
-                    <label htmlFor="biometricImage" className="cursor-pointer text-kweli-primary hover:text-kweli-secondary transition-colors">
-                      <span>Click to upload</span>
-                      <input
-                        type="file"
-                        id="biometricImage"
-                        name="biometricImage"
-                        onChange={handleFileChangeWithDetection}
-                        accept="image/*"
-                        className="sr-only"
-                      />
-                    </label>
-                    <span className="text-gray-500"> or drag and drop</span>
+          <div className="space-y-2">
+            <label htmlFor="biometricImage" className="block text-xs font-medium text-gray-700 mb-1">
+              Fingerprint Image
+            </label>
+            <div 
+              className={`relative border-2 border-dashed rounded-lg p-3 text-center transition-colors ${
+                dragActive ? 'border-kweli-primary bg-kweli-primary/5' : 'border-gray-300 bg-gray-50'
+              }`}
+              onDragEnter={handleDrag}
+              onDragOver={handleDrag}
+              onDragLeave={handleDrag}
+              style={{ minHeight: '100px' }}
+            >
+              {!formData.biometricImage || isDetectingFingerprint ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="flex flex-row items-center gap-3">
+                    <svg className="h-8 w-8 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                    <div>
+                      <label htmlFor="biometricImage" className="cursor-pointer text-kweli-primary hover:text-kweli-secondary transition-colors text-sm">
+                        <span>Click to upload fingerprint</span>
+                        <input
+                          type="file"
+                          id="biometricImage"
+                          name="biometricImage"
+                          onChange={handleFileChangeWithDetection}
+                          accept="image/*"
+                          className="sr-only"
+                        />
+                      </label>
+                      <p className="mt-1 text-xs text-gray-500">PNG, JPG up to 10MB</p>
+                    </div>
                   </div>
-                  <p className="mt-1 text-xs text-gray-500">
-                    PNG, JPG, GIF up to 10MB
-                  </p>
                 </div>
-                
-                {isDetectingFingerprint && (
-                  <div className="mt-4 p-3 bg-blue-50 rounded-md shadow-soft-sm border border-blue-100">
-                    <div className="flex items-center">
-                      <svg className="animate-spin h-5 w-5 text-blue-500 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              ) : (
+                <div className="flex items-center justify-center py-2">
+                  <div className="flex items-center">
+                    <svg className="h-5 w-5 text-green-500 mr-2 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    <span className="text-sm font-medium text-gray-700 truncate">{formData.biometricImage.name}</span>
+                    {fingerprintTemplate && (
+                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                        Fingerprint Detected
+                      </span>
+                    )}
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        handleFileChange({ target: { name: 'biometricImage', value: null } });
+                        setFingerprintTemplate(null);
+                        setDidResult(null);
+                        setCurrentStep(null);
+                        setLocalFingerprintError('');
+                      }}
+                      className="ml-2 text-gray-500 hover:text-red-500"
+                      title="Remove file"
+                    >
+                      <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                       </svg>
-                      <span className="text-sm font-medium text-blue-700">Analyzing fingerprint...</span>
-                    </div>
+                    </button>
                   </div>
-                )}
-                
-                {formData.biometricImage && !isDetectingFingerprint && (
-                  <div className="mt-4 p-3 bg-white rounded-md shadow-soft-sm border border-gray-100">
-                    <div className="flex items-center">
-                      <svg className="h-5 w-5 text-green-500 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                      </svg>
-                      <span className="text-sm font-medium text-gray-700">{formData.biometricImage.name}</span>
-                      {fingerprintTemplate && (
-                        <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                          Fingerprint Detected
-                        </span>
-                      )}
-                    </div>
+                </div>
+              )}
+              
+              {isDetectingFingerprint && (
+                <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-90 rounded-lg">
+                  <div className="flex items-center">
+                    <svg className="animate-spin h-5 w-5 text-blue-500 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span className="text-sm font-medium text-blue-700">Analyzing fingerprint...</span>
                   </div>
-                )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        
+        {/* DID workflow visualization if fingerprint template exists */}
+        {fingerprintTemplate && (
+          <div className="mt-6 bg-gradient-to-r from-indigo-50 to-blue-50 p-4 rounded-lg border border-blue-100">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="font-semibold text-indigo-800">Fingerprint to Blockchain Identity Conversion</h4>
+              <button 
+                type="button" 
+                onClick={() => setShowConversionDetails(!showConversionDetails)}
+                className="text-xs bg-blue-100 hover:bg-blue-200 text-blue-800 px-2 py-1 rounded"
+              >
+                {showConversionDetails ? 'Hide Details' : 'Show Details'}
+              </button>
+            </div>
+            
+            <div className="mb-6">
+              <div className="hidden sm:block">
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                    <div className={`h-0.5 w-full ${currentStep ? 'bg-gray-200' : 'bg-gray-100'}`}></div>
+                  </div>
+                  
+                  <div className="relative flex justify-between">
+                    {workflowSteps.map((step, idx) => (
+                      <div key={step.id} className="flex flex-col items-center">
+                        <div className={`h-8 w-8 flex items-center justify-center rounded-full ${getStepColorClass(step.id)} transition-colors duration-200 shadow-md`}>
+                          {(currentStep === 'did' || 
+                            (workflowSteps.findIndex(s => s.id === step.id) < workflowSteps.findIndex(s => s.id === currentStep))) 
+                            ? (
+                              <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                            ) : (
+                              <span className="text-xs">{idx + 1}</span>
+                            )}
+                        </div>
+                        <div className={`mt-2 text-xs font-medium ${
+                          step.id === currentStep ? 'text-blue-600' : 
+                          currentStep === 'did' || (workflowSteps.findIndex(s => s.id === step.id) < workflowSteps.findIndex(s => s.id === currentStep)) 
+                            ? 'text-green-600' 
+                            : 'text-gray-500'
+                        }`}>
+                          {step.label}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="sm:hidden">
+                <div className="space-y-2">
+                  {workflowSteps.map((step, idx) => (
+                    <div 
+                      key={step.id}
+                      className={`flex items-center p-2 rounded-md ${
+                        step.id === currentStep ? 'bg-blue-100 border-l-4 border-blue-500' : 
+                        currentStep === 'did' || (workflowSteps.findIndex(s => s.id === step.id) < workflowSteps.findIndex(s => s.id === currentStep))
+                          ? 'bg-green-50 border-l-4 border-green-500' 
+                          : 'bg-gray-50 border-l-4 border-gray-300'
+                      }`}
+                    >
+                      <div className={`h-6 w-6 flex items-center justify-center rounded-full mr-2 ${getStepColorClass(step.id)} text-xs`}>
+                        {(currentStep === 'did' || 
+                          (workflowSteps.findIndex(s => s.id === step.id) < workflowSteps.findIndex(s => s.id === currentStep))) 
+                          ? (
+                            <svg className="h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          ) : (
+                            <span>{idx + 1}</span>
+                          )}
+                      </div>
+                      <span 
+                        className={`text-sm font-medium ${
+                          step.id === currentStep ? 'text-blue-700' : 
+                          currentStep === 'did' || (workflowSteps.findIndex(s => s.id === step.id) < workflowSteps.findIndex(s => s.id === currentStep))
+                            ? 'text-green-700' 
+                            : 'text-gray-600'
+                        }`}
+                      >
+                        {step.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
             
-            <div className="space-y-2">
-              <label htmlFor="biometricData" className="block text-sm font-medium text-gray-700">
-                Other Biometric Data File (optional)
-              </label>
-              <div 
-                className={`relative border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-                  dragActive ? 'border-kweli-primary bg-kweli-primary/5' : 'border-gray-300 bg-gray-50'
-                }`}
-                onDragEnter={handleDrag}
-                onDragOver={handleDrag}
-                onDragLeave={handleDrag}
-              >
-                <div className="flex flex-col items-center">
-                  <svg className="mx-auto h-12 w-12 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                  <div className="mt-2 text-sm text-gray-600">
-                    <label htmlFor="biometricData" className="cursor-pointer text-kweli-primary hover:text-kweli-secondary transition-colors">
-                      <span>Click to upload</span>
-                      <input
-                        type="file"
-                        id="biometricData"
-                        name="biometricData"
-                        onChange={handleFileChange}
-                        className="sr-only"
-                      />
-                    </label>
-                    <span className="text-gray-500"> or drag and drop</span>
-                  </div>
-                  <p className="mt-1 text-xs text-gray-500">
-                    Any supported biometric file format
-                  </p>
-                </div>
-                
-                {formData.biometricData && (
-                  <div className="mt-4 p-3 bg-white rounded-md shadow-soft-sm border border-gray-100">
-                    <div className="flex items-center">
+            {showConversionDetails && (
+              <div className="bg-white rounded border border-gray-200 p-3 mb-4 text-xs font-mono h-40 overflow-y-auto">
+                {conversionLog.map((log, index) => (
+                  <div key={index} className="pb-1">{log}</div>
+                ))}
+              </div>
+            )}
+            
+            {didResult && (
+              <div className="bg-white rounded-lg p-4 border border-blue-200 mt-3">
+                <div className="grid grid-cols-1 gap-3">
+                  <div>
+                    <div className="flex items-center mb-1">
                       <svg className="h-5 w-5 text-green-500 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                       </svg>
-                      <span className="text-sm font-medium text-gray-700">{formData.biometricData.name}</span>
+                      <span className="font-medium text-gray-800">Blockchain Identity Generated Successfully!</span>
                     </div>
+                    <span className="text-xs font-medium text-gray-500">DECENTRALIZED IDENTIFIER (DID)</span>
+                    <div className="font-mono text-sm bg-gray-50 p-2 rounded border border-gray-200 truncate">
+                      {didResult.didKey}
+                    </div>
+                    <p className="mt-2 text-xs text-gray-600">
+                      This DID will be stored with the keyperson record. You can now submit to complete registration.
+                    </p>
                   </div>
-                )}
+                  
+                  {showConversionDetails && (
+                    <>
+                      <div>
+                        <span className="text-xs font-medium text-gray-500">PUBLIC KEY (HEX)</span>
+                        <div className="font-mono text-xs bg-gray-50 p-2 rounded border border-gray-200 truncate">
+                          {didResult.publicKey}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-xs font-medium text-red-500 flex items-center">
+                          <svg className="h-3 w-3 mr-1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                          </svg>
+                          PRIVATE KEY (SECURE)
+                        </span>
+                        <div className="font-mono text-xs bg-gray-50 p-2 rounded border border-gray-200 truncate">
+                          {didResult.privateKey}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
+            )}
+          </div>
+        )}
+        
+        {isEditMode && (
+          <div className="mt-6 p-4 bg-blue-50 rounded-md border border-blue-100">
+            <div className="flex items-center">
+              <svg className="h-6 w-6 text-blue-500 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-sm text-blue-700">
+                <span className="font-medium">Note:</span> Updating biometrics will replace any existing biometric data for this keyperson. If you don't upload new biometrics, existing data will be preserved.
+              </p>
             </div>
           </div>
         )}

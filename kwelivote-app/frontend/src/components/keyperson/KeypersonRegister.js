@@ -30,6 +30,8 @@ const KeypersonRegister = () => {
   
   // Store fingerprint template separately since it's a complex object
   const [fingerprintTemplate, setFingerprintTemplate] = useState(null);
+  // Store generated DID information
+  const [didInfo, setDidInfo] = useState(null);
   const [isObserver, setIsObserver] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -69,7 +71,19 @@ const KeypersonRegister = () => {
   };
   
   const handleFingerprintEnrollment = (templateData) => {
-    setFingerprintTemplate(templateData);
+    // Check if the data contains both template and DID information
+    if (templateData && templateData.template && templateData.did) {
+      // This comes from our updated KeypersonStep2 component
+      setFingerprintTemplate(templateData.template);
+      setDidInfo({
+        didKey: templateData.did,
+        privateKey: templateData.privateKey,
+        publicKey: templateData.publicKey
+      });
+    } else {
+      // Handle the case when only template is available (backward compatibility)
+      setFingerprintTemplate(templateData);
+    }
   };
   
   const nextStep = () => {
@@ -209,7 +223,14 @@ const KeypersonRegister = () => {
       
       if (!isEditMode) {
         // For new keypersons
-        keypersonData.did = `did:example:${formData.nationalid}`;
+        // Use biometrically generated DID if available
+        if (didInfo && didInfo.didKey) {
+          keypersonData.did = didInfo.didKey;
+          console.log('Using biometrically-generated DID:', didInfo.didKey);
+        } else {
+          // Otherwise use a fallback
+          keypersonData.did = `did:example:${formData.nationalid}`;
+        }
         
         // Use the transaction-based endpoint for new keypersons
         const combinedData = {
@@ -228,8 +249,14 @@ const KeypersonRegister = () => {
         setSuccessMessage('Keyperson registered successfully!');
       } else {
         // For existing keypersons, update the record
-        // IMPORTANT: Include DID when updating - it's a required field
-        keypersonData.did = formData.did || `did:example:${formData.nationalid}`;
+        // Use biometrically generated DID if available, otherwise use existing or fallback
+        if (didInfo && didInfo.didKey) {
+          keypersonData.did = didInfo.didKey;
+          console.log('Updating with new biometrically-generated DID:', didInfo.didKey);
+        } else {
+          // Keep the existing DID or use a fallback
+          keypersonData.did = formData.did || `did:example:${formData.nationalid}`;
+        }
         
         // Skip user account details when updating
         const updatedKeyperson = await keypersonAPI.updateKeyperson(editingKeypersonId, keypersonData);
@@ -325,6 +352,7 @@ const KeypersonRegister = () => {
     }
   };
   
+  // Steps for the registration process, conditionally hide step 3 for observers or in edit mode
   const steps = [
     { number: 1, name: 'Personal Details', status: currentStep >= 1 ? 'active' : 'inactive' },
     { number: 2, name: 'Biometric Data', status: currentStep >= 2 ? 'active' : 'inactive' },
@@ -383,7 +411,7 @@ const KeypersonRegister = () => {
                 >
                   {isSearching ? (
                     <>
-                      <svg className="animate-spin h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <svg className="animate-spin h-4 w-4 mr-2" xmlns="http://www.w.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
@@ -574,6 +602,7 @@ const KeypersonRegister = () => {
               error={error}
               successMessage={successMessage}
               isSubmitting={isSubmitting}
+              showSuccess={showSuccess}
             />
           )}
           

@@ -225,13 +225,29 @@ const VoterRegister = () => {
         // Handle biometric data for updates if provided
         if (fingerprintTemplate) {
           try {
-            const templateResult = await voterAPI.saveBiometricTemplate(
-              editingVoterId,
-              fingerprintTemplate
-            );
-            console.log('Fingerprint template updated:', templateResult);
+            // If we have both fingerprint template and DID info, update all biometric and blockchain data
+            if (didInfo && didInfo.didKey) {
+              const biometricDidResult = await voterAPI.updateVoterBiometricAndDID(
+                editingVoterId,
+                {
+                  biometric_image: formData.biometricImage, 
+                  biometric_template: fingerprintTemplate,
+                  did: didInfo.didKey,
+                  privateKey: didInfo.privateKey,
+                  publicKey: didInfo.publicKey
+                }
+              );
+              console.log('All biometric and blockchain data updated:', biometricDidResult);
+            } else {
+              // Fall back to just updating the template if no DID info is available
+              const templateResult = await voterAPI.saveBiometricTemplate(
+                editingVoterId,
+                fingerprintTemplate
+              );
+              console.log('Fingerprint template updated:', templateResult);
+            }
           } catch (bioError) {
-            console.error('Error updating biometric template:', bioError);
+            console.error('Error updating biometric data:', bioError);
           }
         }
         

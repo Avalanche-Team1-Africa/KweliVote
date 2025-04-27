@@ -194,6 +194,15 @@ export const voterAPI = {
     );
   },
   
+  // New method to update all biometric and blockchain identity data
+  async updateVoterBiometricAndDID(voterId, data) {
+    return authenticatedRequest(
+      `${API_BASE_URL}/voters/${voterId}/biometric-did/`,
+      'POST',
+      data
+    );
+  },
+  
   // New method to search voters by name or national ID
   async searchVoters(searchTerm) {
     // Get all voters and filter on the client-side

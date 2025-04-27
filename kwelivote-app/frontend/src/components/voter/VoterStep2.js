@@ -12,6 +12,7 @@ const VoterStep2 = ({ formData, handleFileChange, prevStep, handleSubmit, isSubm
   const [showConversionDetails, setShowConversionDetails] = useState(false);
   const [currentStep, setCurrentStep] = useState(null);
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const [localFingerprintError, setLocalFingerprintError] = useState('');
 
   const workflowSteps = [
     { id: 'fingerprint', label: 'Fingerprint' },
@@ -33,6 +34,7 @@ const VoterStep2 = ({ formData, handleFileChange, prevStep, handleSubmit, isSubm
       try {
         setConversionLog([]);
         setCurrentStep('fingerprint');
+        setLocalFingerprintError(''); // Clear any previous errors
 
         const originalConsoleLog = console.log;
         console.log = (message) => {
@@ -60,6 +62,7 @@ const VoterStep2 = ({ formData, handleFileChange, prevStep, handleSubmit, isSubm
       } catch (error) {
         console.error('Error during biometric to DID conversion:', error);
         setConversionLog(prevLogs => [...prevLogs, `Error: ${error.message}`]);
+        setLocalFingerprintError(`Error during biometric to DID conversion: ${error.message}`);
       }
     }
   }, [fingerprintTemplate, formData.nationalid, onDIDGenerated]);
@@ -116,6 +119,7 @@ const VoterStep2 = ({ formData, handleFileChange, prevStep, handleSubmit, isSubm
     }
 
     setIsDetectingFingerprint(true);
+    setLocalFingerprintError(''); // Clear previous errors
 
     try {
       const reader = new FileReader();
@@ -160,6 +164,7 @@ const VoterStep2 = ({ formData, handleFileChange, prevStep, handleSubmit, isSubm
           } else {
             console.log('Not a fingerprint or low-quality fingerprint');
             setIsDetectingFingerprint(false);
+            setLocalFingerprintError('The uploaded image does not appear to be a valid fingerprint or is of low quality. Please upload a clearer fingerprint image.');
           }
         };
 
@@ -170,6 +175,7 @@ const VoterStep2 = ({ formData, handleFileChange, prevStep, handleSubmit, isSubm
     } catch (error) {
       console.error('Error detecting fingerprint:', error);
       setIsDetectingFingerprint(false);
+      setLocalFingerprintError(`Error analyzing fingerprint: ${error.message}`);
     }
   };
 
@@ -250,6 +256,18 @@ const VoterStep2 = ({ formData, handleFileChange, prevStep, handleSubmit, isSubm
       )}
 
       <div className="p-5 bg-gradient-to-r from-gray-50 to-kweli-light border border-gray-100 rounded-lg shadow-soft-sm">
+        {/* Show error message if available */}
+        {localFingerprintError && (
+          <div className="mb-6 bg-red-50 border-l-4 border-red-400 text-red-700 p-4 rounded-md shadow-soft-sm animate-fade-in" role="alert">
+            <div className="flex items-center">
+              <svg className="h-5 w-5 mr-2 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>{localFingerprintError}</span>
+            </div>
+          </div>
+        )}
+        
         <div className="flex items-center mb-4">
           <div className="h-8 w-8 bg-kweli-primary/10 rounded-full flex items-center justify-center mr-3">
             <svg className="h-4 w-4 text-kweli-primary" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -308,27 +326,29 @@ const VoterStep2 = ({ formData, handleFileChange, prevStep, handleSubmit, isSubm
                 onDragLeave={handleDrag}
                 style={{ height: '100px' }}
               >
-                <div className="flex items-center justify-center h-full">
-                  <div className="flex flex-row items-center gap-3">
-                    <svg className="h-8 w-8 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                    </svg>
-                    <div>
-                      <label htmlFor="biometricImage" className="cursor-pointer text-kweli-primary hover:text-kweli-secondary transition-colors text-sm">
-                        <span>Click to upload fingerprint</span>
-                        <input
-                          type="file"
-                          id="biometricImage"
-                          name="biometricImage"
-                          onChange={handleFileChangeWithDetection}
-                          accept="image/*"
-                          className="sr-only"
-                        />
-                      </label>
-                      <p className="mt-1 text-xs text-gray-500">PNG, JPG up to 10MB</p>
+                {!formData.biometricImage || isDetectingFingerprint ? (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="flex flex-row items-center gap-3">
+                      <svg className="h-8 w-8 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                      <div>
+                        <label htmlFor="biometricImage" className="cursor-pointer text-kweli-primary hover:text-kweli-secondary transition-colors text-sm">
+                          <span>Click to upload fingerprint</span>
+                          <input
+                            type="file"
+                            id="biometricImage"
+                            name="biometricImage"
+                            onChange={handleFileChangeWithDetection}
+                            accept="image/*"
+                            className="sr-only"
+                          />
+                        </label>
+                        <p className="mt-1 text-xs text-gray-500">PNG, JPG up to 10MB</p>
+                      </div>
                     </div>
                   </div>
-                </div>
+                ) : null}
                 
                 {isDetectingFingerprint && (
                   <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-90 rounded-lg">
@@ -354,6 +374,22 @@ const VoterStep2 = ({ formData, handleFileChange, prevStep, handleSubmit, isSubm
                       Fingerprint Detected
                     </span>
                   )}
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      handleFileChange({ target: { name: 'biometricImage', value: null } });
+                      setFingerprintTemplate(null);
+                      setDidResult(null);
+                      setCurrentStep(null);
+                      setLocalFingerprintError('');
+                    }}
+                    className="ml-auto text-gray-500 hover:text-red-500"
+                    title="Remove file"
+                  >
+                    <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </button>
                 </div>
               )}
             </div>

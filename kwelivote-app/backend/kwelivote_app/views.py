@@ -15,6 +15,8 @@ from .serializers import (
     ResultsCountSerializer
 )
 from django.db import transaction
+import json
+from datetime import datetime
 
 # Custom token serializer for KeyPerson model
 class KeyPersonTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -333,6 +335,70 @@ def save_keyperson_biometric_template(request, keyperson_id):
             {'error': str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def update_voter_biometric_did(request, voter_id):
+    """
+    Update a voter's biometric data, DID, and blockchain keys
+    """
+    try:
+        voter = Voter.objects.get(id=voter_id)
+        
+        # Get data from request
+        biometric_image = request.data.get('biometric_image')
+        biometric_template = request.data.get('biometric_template')
+        did = request.data.get('did')
+        private_key = request.data.get('privateKey')
+        public_key = request.data.get('publicKey')
+        
+        # Update voter fields
+        if biometric_image:
+            voter.biometric_image = biometric_image
+        
+        if biometric_template:
+            voter.biometric_template = biometric_template
+            voter.has_template = True
+            
+            # Store the raw biometric data as well
+            voter.biometric_data = json.dumps({
+                'template': biometric_template,
+                'timestamp': datetime.now().isoformat()
+            })
+        
+        if did:
+            voter.did = did
+        
+        # Store private/public keys in biometric_data JSON
+        if private_key or public_key:
+            biometric_data = json.loads(voter.biometric_data) if voter.biometric_data else {}
+            
+            if private_key:
+                biometric_data['privateKey'] = private_key
+            
+            if public_key:
+                biometric_data['publicKey'] = public_key
+                
+            voter.biometric_data = json.dumps(biometric_data)
+        
+        voter.save()
+        
+        return Response({
+            'status': 'success',
+            'message': 'Voter biometric data and DID updated successfully',
+            'voter_id': str(voter.id)
+        })
+        
+    except Voter.DoesNotExist:
+        return Response({
+            'status': 'error',
+            'message': f'Voter with ID {voter_id} not found'
+        }, status=404)
+    except Exception as e:
+        return Response({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
 
 @api_view(['GET'])
 def api_root(request, format=None):
