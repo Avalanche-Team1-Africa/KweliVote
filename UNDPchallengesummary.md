@@ -1,0 +1,40 @@
+# UNDP Challenge: Transparent and Credible Electoral Processes in Burundi
+
+## Overview
+- **Focus Area:** Digital Identity
+- **Related SDGs:**
+  - SDG 8 - Decent work and economic growth
+  - SDG 10 - Reduced inequalities
+  - SDG 16 - Peace justice and strong institutions
+- **Location:** Burundi
+
+## Description
+
+### What is the Challenge?
+
+Burundi faces significant challenges in ensuring transparent and credible electoral processes due to the absence of a unique identifier for each citizen. The lack of biometric identity cards has historically led to electoral fraud, such as multiple voting and identity manipulation, undermining trust in the democratic process. 
+
+With legislative, communal, and hill elections scheduled for 2025 and presidential elections in 2027, the need for a secure and reliable identification system is critical. Additionally, concerns over data security and privacy further complicate efforts to introduce robust identity verification mechanisms.
+
+### Challenge Owner(s)
+Government
+
+### Who is affected by this challenge?
+Government and Community
+
+### Geographic context
+Burundi
+
+## Proposed Solution
+
+### Envisioned Blockchain Solution
+
+A blockchain-based biometric identity system can address these challenges by providing a secure, decentralized platform for managing voter identities. This system would integrate biometric data, such as fingerprints and facial recognition, with a blockchain ledger to create unique, tamper-proof identifiers for each citizen. 
+
+Blockchain's immutable records would prevent identity duplication and manipulation, ensuring fair voter registration and election processes. Real-time verification at polling stations could streamline voting while maintaining transparency. Furthermore, the system would enhance data security by giving citizens control over their personal information through cryptographic keys.
+
+### Partnerships already in place
+None
+
+### Additional Information
+UNDP Burundi has supported Burundian Government in pilot phase of digitalization of civil registry services.
