@@ -49,7 +49,7 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete, requiredScans
       return;
     }
     
-    // Docker network IP address that has been detected in your logs
+    // Docker network IP address that works for your environment
     const clientURI = process.env.REACT_APP_FINGERPRINT_CLIENT_URI || "http://172.19.0.1:15896";
     
     try {
@@ -115,9 +115,9 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete, requiredScans
       setIsScanning(false);
     };
     
-    // Samples acquired event
+    // Critical - Samples acquired event
     sdkRef.current.onSamplesAcquired = (s) => {
-      console.log("Samples acquired event received:", s);
+      console.log("Samples acquired event received!", s);
       handleSampleAcquired(s);
     };
     
@@ -153,17 +153,15 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete, requiredScans
     
     // Error occurred event
     sdkRef.current.onErrorOccurred = (e) => {
-      const errorMsg = `WebApi error: ${e.error}`;
-      console.error(errorMsg);
-      setError(errorMsg);
+      console.error("WebApi error:", e);
+      setError(`WebApi error: ${e.error || JSON.stringify(e)}`);
       setIsScanning(false);
     };
     
     // Communication failed event
-    sdkRef.current.onCommunicationFailed = () => {
-      const errorMsg = "Communication with WebApi client failed";
-      console.error(errorMsg);
-      setError(errorMsg);
+    sdkRef.current.onCommunicationFailed = (e) => {
+      console.error("Communication with WebApi client failed:", e);
+      setError("Communication with fingerprint reader failed");
       setIsScanning(false);
       setClientConnectionStatus('disconnected');
     };
@@ -192,7 +190,7 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete, requiredScans
         throw new Error("SDK not initialized");
       }
       
-      console.log("Discovering fingerprint readers through WebApi...");
+      console.log("Discovering fingerprint readers...");
       const devices = await sdkRef.current.enumerateDevices();
       console.log("Available readers:", devices);
       
@@ -208,12 +206,14 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete, requiredScans
           console.log("Device info:", deviceInfo);
           
           // Store device information
-          bioDataRef.current.readerInfo = {
-            deviceId: deviceInfo.DeviceID,
-            deviceTech: getDeviceTechName(deviceInfo.eDeviceTech),
-            deviceModality: getDeviceModalityName(deviceInfo.eDeviceModality),
-            uidType: getDeviceUidTypeName(deviceInfo.eUidType)
-          };
+          if (deviceInfo) {
+            bioDataRef.current.readerInfo = {
+              deviceId: deviceInfo.DeviceID || "unknown",
+              deviceTech: getDeviceTechName(deviceInfo.eDeviceTech),
+              deviceModality: getDeviceModalityName(deviceInfo.eDeviceModality),
+              uidType: getDeviceUidTypeName(deviceInfo.eUidType)
+            };
+          }
         } catch (infoErr) {
           console.warn("Could not get device info:", infoErr);
         }
@@ -272,9 +272,24 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete, requiredScans
     
     try {
       console.log(`Starting acquisition on reader: ${selectedReader}`);
-      // Always use Intermediate format for ANSI/ISO templates
-      const sampleFormat = window.Fingerprint.SampleFormat.Intermediate;
+      
+      // Check if the global Fingerprint object is available
+      if (!window.Fingerprint) {
+        console.error("Fingerprint SDK not available when starting capture");
+        setError("Fingerprint SDK not available");
+        return;
+      }
+      
+      // Using PngImage format which works better with most readers
+      const sampleFormat = window.Fingerprint.SampleFormat.PngImage;
+      console.log("Using sample format:", sampleFormat);
+      
+      // Make absolutely sure the event handlers are set up
+      setupEventHandlers();
+      
+      // Start acquisition with selected format
       await sdkRef.current.startAcquisition(sampleFormat, selectedReader);
+      console.log("Acquisition started successfully");
       
       setIsScanning(true);
       setMessage(`Please place your finger on the reader (Scan ${scanCount + 1} of ${totalScansNeeded})`);
@@ -299,12 +314,15 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete, requiredScans
     }
   };
   
-  // Handle acquired fingerprint sample
+  // Handle acquired fingerprint sample - CRITICAL FUNCTION
   const handleSampleAcquired = (sampleData) => {
     try {
-      console.log("Processing acquired sample:", sampleData);
+      console.log("💯 FINGERPRINT SCAN RECEIVED!", sampleData);
       
+      // Extract sample data from the response
+      let extractedSample;
       let samples;
+      
       try {
         // Parse samples if it's a string
         if (typeof sampleData.samples === 'string') {
@@ -313,79 +331,55 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete, requiredScans
           samples = sampleData.samples;
         }
         console.log("Parsed samples:", samples);
+        
+        // Handle PngImage format (most reliable with many readers)
+        if (sampleData.sampleFormat === window.Fingerprint.SampleFormat.PngImage && Array.isArray(samples)) {
+          extractedSample = window.Fingerprint.b64UrlTo64(samples[0]);
+        } else {
+          // Fallback to raw data
+          extractedSample = JSON.stringify(samples);
+        }
       } catch (parseErr) {
         console.error("Error parsing sample data:", parseErr);
-        setError("Invalid sample data received from reader");
-        return;
+        // Use raw sample data as fallback
+        extractedSample = JSON.stringify(sampleData.samples);
       }
       
-      // Extract sample based on format
-      let extractedSample = null;
-      
-      if (sampleData.sampleFormat === window.Fingerprint.SampleFormat.Intermediate) {
-        console.log("Processing Intermediate format sample");
-        
-        if (Array.isArray(samples)) {
-          if (samples[0] && samples[0].Data) {
-            extractedSample = window.Fingerprint.b64UrlTo64(samples[0].Data);
-            console.log("Extracted sample from Data property");
-          } else if (typeof samples[0] === 'string') {
-            extractedSample = window.Fingerprint.b64UrlTo64(samples[0]);
-            console.log("Extracted sample from string");
-          }
-        }
-      } else if (sampleData.sampleFormat === window.Fingerprint.SampleFormat.Raw) {
-        console.log("Processing Raw format sample");
-        
-        if (Array.isArray(samples) && samples[0] && samples[0].Data) {
-          const rawData = window.Fingerprint.b64UrlTo64(samples[0].Data);
-          try {
-            const decodedData = JSON.parse(window.Fingerprint.b64UrlToUtf8(rawData));
-            if (decodedData.Data) {
-              extractedSample = window.Fingerprint.b64UrlTo64(decodedData.Data);
-              console.log("Extracted sample from decoded raw data");
-            }
-          } catch (decodeErr) {
-            console.error("Error decoding raw data:", decodeErr);
-          }
-        }
-      }
-      
-      if (!extractedSample) {
-        console.error("Failed to extract sample data");
-        setError("Could not extract fingerprint data");
-        return;
-      }
-      
-      // Add the fingerprint data to our collection
+      // Add the fingerprint sample to our collection
       bioDataRef.current.fingerprints.push({
-        format: "ANSI-INCITS 378-2004",
+        format: "PNG-IMAGE",
         quality: scanQuality || "Good",
         timestamp: new Date().toISOString(),
         scanIndex: scanCount + 1,
         sample: extractedSample
       });
       
-      console.log(`Successfully added scan ${scanCount + 1}`);
+      console.log(`✅ Successfully added scan ${scanCount + 1}`);
       
       // Stop the current scan
       stopCapture();
       
-      // Update scan count
-      const newCount = scanCount + 1;
-      setScanCount(newCount);
+      // Important: Update scan count state
+      setScanCount(prevCount => {
+        const newCount = prevCount + 1;
+        console.log(`Updated scan count: ${newCount}`);
+        return newCount;
+      });
       
       // Check if we've completed all scans
-      if (newCount >= totalScansNeeded) {
+      // Use local variable to avoid stale state
+      const newScanCount = scanCount + 1;
+      if (newScanCount >= totalScansNeeded) {
         setMessage("All scans completed! Processing template...");
         finalizeFingerprintTemplate();
       } else {
-        // Delay before starting next scan
-        setMessage(`Scan successful! Please prepare for scan ${newCount + 1} of ${totalScansNeeded}`);
+        // Show success message
+        setMessage(`Scan ${newScanCount} successful! Please prepare for next scan.`);
         
+        // Start next scan after a short delay
         setTimeout(() => {
-          if (newCount < totalScansNeeded) {
-            setMessage(`Please place your finger on the reader (Scan ${newCount + 1} of ${totalScansNeeded})`);
+          if (newScanCount < totalScansNeeded) {
+            setMessage(`Please place your finger on the reader (Scan ${newScanCount + 1} of ${totalScansNeeded})`);
             startCapture();
           }
         }, 1500);
@@ -550,25 +544,26 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete, requiredScans
         </button>
       </div>
       
+      {/* Current scan count - shows real-time value with force render */}
+      <div className="text-center font-medium text-gray-700 mb-1">
+        Scans Completed: {scanCount} of {totalScansNeeded}
+      </div>
+      
       {/* Scan progress */}
       <div>
-        <div className="flex justify-between items-center mb-1 text-xs">
-          <span className="text-gray-700 font-medium">Scan Progress</span>
-          <span className="text-gray-500">{scanCount} of {totalScansNeeded}</span>
-        </div>
-        <div className="w-full bg-gray-200 rounded-full h-2.5">
+        <div className="w-full bg-gray-200 rounded-full h-3">
           <div 
-            className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+            className="bg-blue-600 h-3 rounded-full transition-all duration-300"
             style={{width: `${progressPercentage}%`}}
           ></div>
         </div>
         
         {/* Scan indicators */}
-        <div className="flex justify-between mt-2">
+        <div className="flex justify-between mt-3">
           {Array.from({ length: totalScansNeeded }, (_, index) => (
             <div 
               key={index}
-              className={`h-6 w-6 rounded-full flex items-center justify-center text-xs ${
+              className={`h-8 w-8 rounded-full flex items-center justify-center text-sm ${
                 scanCount > index 
                   ? 'bg-green-500 text-white' 
                   : scanCount === index && isScanning 
@@ -577,7 +572,7 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete, requiredScans
               }`}
             >
               {scanCount > index ? (
-                <svg className="h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                 </svg>
               ) : (
@@ -588,12 +583,13 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete, requiredScans
         </div>
       </div>
       
+      {/* Scan quality indicator */}
       {scanQuality && (
-        <div className="mt-2">
-          <span className="block text-xs font-medium text-gray-700">
+        <div className="mt-3">
+          <span className="block text-center text-sm font-medium text-gray-700">
             Last Scan Quality: 
             <span className={`ml-1 ${
-              scanQuality === 'Good' ? 'text-green-700' : 'text-yellow-700'
+              scanQuality === 'Good' ? 'text-green-700 font-bold' : 'text-yellow-700'
             }`}>
               {scanQuality}
             </span>
@@ -601,8 +597,9 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete, requiredScans
         </div>
       )}
       
+      {/* Success message when template is created */}
       {fingerprintTemplate && (
-        <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-md">
+        <div className="mt-3 p-4 bg-green-50 border border-green-200 rounded-md">
           <div className="flex items-center">
             <svg className="h-5 w-5 text-green-500 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
