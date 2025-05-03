@@ -310,6 +310,7 @@ const VoterStep2 = ({ formData, handleFileChange, prevStep, handleSubmit, isSubm
           <FingerprintEnrollment 
             nationalId={formData.nationalid} 
             onEnrollmentComplete={handleEnrollmentComplete}
+            requiredScans={5}
           />
         ) : (
           <div className="space-y-4">
