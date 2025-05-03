@@ -12,21 +12,23 @@ import React, { useState, useEffect, useRef } from 'react';
  * @param {Object} props
  * @param {string} props.nationalId - The national ID to link with the biometric data
  * @param {Function} props.onEnrollmentComplete - Callback triggered when enrollment completes
- * @param {number} [props.requiredScans=5] - Number of scans required (defaults to 5)
+ * @param {number} [props.requiredScans=5] - Number of scans required (always 5)
  */
-const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete, requiredScans = 5 }) => {
+const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete }) => {
   // State variables
   const [readers, setReaders] = useState([]);
   const [selectedReader, setSelectedReader] = useState('');
   const [isConnecting, setIsConnecting] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [scanCount, setScanCount] = useState(0);
-  const [totalScansNeeded] = useState(requiredScans);
+  const [totalScansNeeded] = useState(5); // Always fixed at 5 scans
   const [message, setMessage] = useState('Connect to a fingerprint reader to begin');
   const [error, setError] = useState('');
   const [scanQuality, setScanQuality] = useState(null);
   const [fingerprintTemplate, setFingerprintTemplate] = useState(null);
   const [clientConnectionStatus, setClientConnectionStatus] = useState('disconnected');
+  const [showGenerateButton, setShowGenerateButton] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   
   // Use refs to maintain consistent access across renders
   const sdkRef = useRef(null);
@@ -319,6 +321,13 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete, requiredScans
     try {
       console.log("💯 FINGERPRINT SCAN RECEIVED!", sampleData);
       
+      // First check if we already have 5 scans - if so, ignore this scan
+      if (scanCount >= totalScansNeeded) {
+        console.log(`Ignoring scan - already have ${scanCount} of ${totalScansNeeded} scans`);
+        stopCapture();
+        return;
+      }
+      
       // Extract sample data from the response
       let extractedSample;
       let samples;
@@ -359,37 +368,54 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete, requiredScans
       // Stop the current scan
       stopCapture();
       
-      // Important: Update scan count state
+      // Important: Update scan count state - strictly enforce the limit
+      // Use a function updater form to ensure we're working with the latest state
       setScanCount(prevCount => {
-        const newCount = prevCount + 1;
+        const newCount = Math.min(prevCount + 1, totalScansNeeded);
         console.log(`Updated scan count: ${newCount}`);
+        
+        // Move this logic inside the state updater to ensure it runs with the correct count
+        // Check if we've completed all scans
+        if (newCount >= totalScansNeeded) {
+          // When we reach 5 scans, don't finalize template automatically
+          // Instead, show the generate button and make sure we stop scanning
+          console.log("✓ All scans completed, enabling generate button...");
+          setMessage("All 5 scans completed! Click 'Save Fingerprint template and generate DID' button below.");
+          setShowGenerateButton(true);
+          stopCapture();
+        } else {
+          // Show success message
+          setMessage(`Scan ${newCount} successful! Please prepare for next scan.`);
+          
+          // Start next scan after a short delay
+          setTimeout(() => {
+            if (newCount < totalScansNeeded) {
+              setMessage(`Please place your finger on the reader (Scan ${newCount + 1} of ${totalScansNeeded})`);
+              startCapture();
+            }
+          }, 1500);
+        }
+        
         return newCount;
       });
-      
-      // Check if we've completed all scans
-      // Use local variable to avoid stale state
-      const newScanCount = scanCount + 1;
-      if (newScanCount >= totalScansNeeded) {
-        setMessage("All scans completed! Processing template...");
-        finalizeFingerprintTemplate();
-      } else {
-        // Show success message
-        setMessage(`Scan ${newScanCount} successful! Please prepare for next scan.`);
-        
-        // Start next scan after a short delay
-        setTimeout(() => {
-          if (newScanCount < totalScansNeeded) {
-            setMessage(`Please place your finger on the reader (Scan ${newScanCount + 1} of ${totalScansNeeded})`);
-            startCapture();
-          }
-        }, 1500);
-      }
     } catch (err) {
       console.error("Error processing sample:", err);
       setError(`Error processing scan: ${err.message}`);
       setIsScanning(false);
     }
   };
+
+  useEffect(() => {
+    // When scan count reaches the limit, ensure the generate button is shown
+    if (scanCount >= totalScansNeeded) {
+      setShowGenerateButton(true);
+    }
+  }, [scanCount, totalScansNeeded]);
+
+  // Add a debug display for development that will help diagnose state update issues
+  useEffect(() => {
+    console.log(`⚛️ React state updated - scanCount: ${scanCount}, isScanning: ${isScanning}, showGenerateButton: ${showGenerateButton}`);
+  }, [scanCount, isScanning, showGenerateButton]);
   
   // Reset the enrollment process
   const resetEnrollment = () => {
@@ -397,6 +423,7 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete, requiredScans
     
     setScanCount(0);
     setFingerprintTemplate(null);
+    setShowGenerateButton(false);
     setError('');
     setMessage('Ready to start enrollment');
     
@@ -415,6 +442,17 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete, requiredScans
     };
   };
   
+  // Handle generate template and DID button click
+  const handleGenerateTemplateAndDID = () => {
+    setIsGenerating(true);
+    setMessage("Generating fingerprint template and DID...");
+    
+    // Short delay to show processing message
+    setTimeout(() => {
+      finalizeFingerprintTemplate();
+    }, 500);
+  };
+  
   // Finalize the template when all scans are completed
   const finalizeFingerprintTemplate = () => {
     try {
@@ -428,16 +466,18 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete, requiredScans
       
       // Update state
       setFingerprintTemplate(template);
+      setIsGenerating(false);
       
       // Call the callback if provided
       if (onEnrollmentComplete) {
         onEnrollmentComplete(template);
       }
       
-      setMessage("Template created successfully!");
+      setMessage("Template created successfully! DID generation process started.");
     } catch (err) {
       console.error("Error finalizing template:", err);
       setError(`Failed to create template: ${err.message}`);
+      setIsGenerating(false);
     }
   };
   
@@ -446,8 +486,8 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete, requiredScans
     setSelectedReader(e.target.value);
   };
 
-  // Calculate progress percentage for the progress bar
-  const progressPercentage = (scanCount / totalScansNeeded) * 100;
+  // Calculate progress percentage for the progress bar - Make sure it never exceeds 100%
+  const progressPercentage = Math.min((scanCount / totalScansNeeded) * 100, 100);
   
   return (
     <div className="space-y-4 border rounded-lg bg-gray-50 p-4">
@@ -508,37 +548,64 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete, requiredScans
       
       {/* Scan controls */}
       <div className="flex space-x-2 mb-4">
-        <button
-          type="button"
-          className={`flex-1 py-2 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-            !selectedReader || isScanning || scanCount >= totalScansNeeded 
-              ? 'bg-gray-300 cursor-not-allowed' 
-              : 'bg-green-600 hover:bg-green-700 focus:ring-green-500'
-          }`}
-          onClick={startCapture}
-          disabled={!selectedReader || isScanning || scanCount >= totalScansNeeded}
-        >
-          {isScanning ? "Scanning..." : "Start Scan"}
-        </button>
-        
-        <button
-          type="button"
-          className={`py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-            !isScanning 
-              ? 'bg-gray-300 cursor-not-allowed' 
-              : 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500'
-          }`}
-          onClick={stopCapture}
-          disabled={!isScanning}
-        >
-          Stop
-        </button>
+        {!showGenerateButton ? (
+          <>
+            <button
+              type="button"
+              className={`flex-1 py-2 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                !selectedReader || isScanning || scanCount >= totalScansNeeded 
+                  ? 'bg-gray-300 cursor-not-allowed' 
+                  : 'bg-green-600 hover:bg-green-700 focus:ring-green-500'
+              }`}
+              onClick={startCapture}
+              disabled={!selectedReader || isScanning || scanCount >= totalScansNeeded}
+            >
+              {isScanning ? "Scanning..." : "Start Scan"}
+            </button>
+            
+            <button
+              type="button"
+              className={`py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                !isScanning 
+                  ? 'bg-gray-300 cursor-not-allowed' 
+                  : 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500'
+              }`}
+              onClick={stopCapture}
+              disabled={!isScanning}
+            >
+              Stop
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className={`flex-1 py-3 text-white rounded-md font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+              isGenerating 
+                ? 'bg-gray-400 cursor-not-allowed' 
+                : 'bg-purple-600 hover:bg-purple-700 focus:ring-purple-500'
+            }`}
+            onClick={handleGenerateTemplateAndDID}
+            disabled={isGenerating}
+          >
+            {isGenerating ? (
+              <>
+                <svg className="animate-spin inline-block h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Generating...
+              </>
+            ) : (
+              <>Save Fingerprint template and generate DID</>
+            )}
+          </button>
+        )}
         
         <button
           type="button"
           className="py-2 px-4 bg-gray-600 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
           onClick={resetEnrollment}
-          disabled={isScanning}
+          disabled={isScanning || isGenerating}
         >
           Reset
         </button>
@@ -604,7 +671,7 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete, requiredScans
             <svg className="h-5 w-5 text-green-500 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
             </svg>
-            <span className="text-green-800 text-sm font-medium">All scans complete! Fingerprint template ready.</span>
+            <span className="text-green-800 text-sm font-medium">Fingerprint template created! DID generation in progress...</span>
           </div>
         </div>
       )}
