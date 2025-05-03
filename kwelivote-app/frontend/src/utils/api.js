@@ -203,21 +203,46 @@ export const voterAPI = {
     );
   },
   
-  // New method to search voters by name or national ID
+  // Enhanced search method with server-side and client-side fallback
   async searchVoters(searchTerm) {
-    // Get all voters and filter on the client-side
-    // In a production app, you'd want to implement server-side filtering
-    const voters = await authenticatedRequest(`${API_BASE_URL}/voters/`);
-    
     if (!searchTerm) return [];
     
-    searchTerm = searchTerm.toLowerCase();
-    return voters.filter(voter => 
-      voter.nationalid.toLowerCase().includes(searchTerm) ||
-      voter.firstname.toLowerCase().includes(searchTerm) ||
-      voter.surname.toLowerCase().includes(searchTerm) ||
-      (voter.middlename && voter.middlename.toLowerCase().includes(searchTerm))
-    );
+    try {
+      // Try server-side search first (assumes backend has search endpoint)
+      try {
+        const response = await fetch(`${API_BASE_URL}/voters/search/?q=${encodeURIComponent(searchTerm)}`, {
+          headers: {
+            'Authorization': `Bearer ${JSON.parse(sessionStorage.getItem('userInfo') || '{}').token}`
+          }
+        });
+        
+        // Check if response is OK and is JSON
+        const contentType = response.headers.get('content-type');
+        if (response.ok && contentType && contentType.includes('application/json')) {
+          return await response.json();
+        } else {
+          // If not JSON or not OK, throw error to trigger fallback
+          throw new Error('Server-side search unavailable or returned non-JSON response');
+        }
+      } catch (searchError) {
+        console.log('Server-side search error:', searchError.message);
+        throw searchError; // Re-throw to trigger fallback
+      }
+    } catch (error) {
+      console.log('Server-side search not available, falling back to client-side filtering');
+      
+      // Fallback to client-side filtering
+      const voters = await authenticatedRequest(`${API_BASE_URL}/voters/`);
+      searchTerm = searchTerm.toLowerCase();
+      
+      return voters.filter(voter => 
+        voter.nationalid.toLowerCase().includes(searchTerm) ||
+        voter.firstname.toLowerCase().includes(searchTerm) ||
+        voter.surname.toLowerCase().includes(searchTerm) ||
+        (voter.middlename && voter.middlename.toLowerCase().includes(searchTerm)) ||
+        (voter.designated_polling_station && voter.designated_polling_station.toLowerCase().includes(searchTerm))
+      );
+    }
   }
 };
 
@@ -282,20 +307,44 @@ export const keypersonAPI = {
   
   // New method to search keypersons by name or national ID
   async searchKeypersons(searchTerm) {
-    // Get all keypersons and filter on the client-side
-    // In a production app, you'd want to implement server-side filtering
-    const keypersons = await authenticatedRequest(`${API_BASE_URL}/keypersons/`);
-    
     if (!searchTerm) return [];
     
-    searchTerm = searchTerm.toLowerCase();
-    return keypersons.filter(keyperson => 
-      keyperson.nationalid.toLowerCase().includes(searchTerm) ||
-      keyperson.firstname.toLowerCase().includes(searchTerm) ||
-      keyperson.surname.toLowerCase().includes(searchTerm) ||
-      (keyperson.middlename && keyperson.middlename.toLowerCase().includes(searchTerm)) ||
-      (keyperson.role && keyperson.role.toLowerCase().includes(searchTerm))
-    );
+    try {
+      // Try server-side search first (assumes backend has search endpoint)
+      try {
+        const response = await fetch(`${API_BASE_URL}/keypersons/search/?q=${encodeURIComponent(searchTerm)}`, {
+          headers: {
+            'Authorization': `Bearer ${JSON.parse(sessionStorage.getItem('userInfo') || '{}').token}`
+          }
+        });
+        
+        // Check if response is OK and is JSON
+        const contentType = response.headers.get('content-type');
+        if (response.ok && contentType && contentType.includes('application/json')) {
+          return await response.json();
+        } else {
+          // If not JSON or not OK, throw error to trigger fallback
+          throw new Error('Server-side search unavailable or returned non-JSON response');
+        }
+      } catch (searchError) {
+        console.log('Server-side search error:', searchError.message);
+        throw searchError; // Re-throw to trigger fallback
+      }
+    } catch (error) {
+      console.log('Server-side search not available, falling back to client-side filtering');
+      
+      // Fallback to client-side filtering
+      const keypersons = await authenticatedRequest(`${API_BASE_URL}/keypersons/`);
+      searchTerm = searchTerm.toLowerCase();
+      
+      return keypersons.filter(keyperson => 
+        keyperson.nationalid.toLowerCase().includes(searchTerm) ||
+        keyperson.firstname.toLowerCase().includes(searchTerm) ||
+        keyperson.surname.toLowerCase().includes(searchTerm) ||
+        (keyperson.middlename && keyperson.middlename.toLowerCase().includes(searchTerm)) ||
+        (keyperson.role && keyperson.role.toLowerCase().includes(searchTerm))
+      );
+    }
   }
 };
 

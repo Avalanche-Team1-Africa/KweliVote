@@ -7,6 +7,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
+from django.db.models import Q
 from .models import Voter, KeyPerson, Candidate, ResultsCount
 from .serializers import (
     VoterSerializer, 
@@ -399,6 +400,63 @@ def update_voter_biometric_did(request, voter_id):
             'status': 'error',
             'message': str(e)
         }, status=500)
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def search_voters(request):
+    """
+    Search voters by name or national ID
+    """
+    try:
+        q = request.GET.get('q', '')
+        if not q:
+            return Response([], status=status.HTTP_200_OK)
+        
+        # Filter voters by name or national ID
+        voters = Voter.objects.filter(
+            Q(nationalid__icontains=q) | 
+            Q(firstname__icontains=q) | 
+            Q(surname__icontains=q) | 
+            Q(middlename__icontains=q) |
+            Q(designated_polling_station__icontains=q)
+        )[:50]  # Limit to 50 results for performance
+        
+        serializer = VoterSerializer(voters, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def search_keypersons(request):
+    """
+    Search keypersons by name, national ID, or role
+    """
+    try:
+        q = request.GET.get('q', '')
+        if not q:
+            return Response([], status=status.HTTP_200_OK)
+        
+        # Filter keypersons by name, national ID, or role
+        keypersons = KeyPerson.objects.filter(
+            Q(nationalid__icontains=q) | 
+            Q(firstname__icontains=q) | 
+            Q(surname__icontains=q) | 
+            Q(middlename__icontains=q) |
+            Q(role__icontains=q) |
+            Q(political_party__icontains=q)
+        )[:50]  # Limit to 50 results for performance
+        
+        serializer = KeyPersonSerializer(keypersons, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 @api_view(['GET'])
 def api_root(request, format=None):
