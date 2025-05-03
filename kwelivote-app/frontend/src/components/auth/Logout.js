@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../utils/AuthContext';
 
 const Logout = () => {
-  const navigate = useNavigate();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const { logout } = useAuth();
 

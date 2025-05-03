@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { resultsAPI, candidateAPI } from '../../utils/api';
 
 const ResultsCount = () => {
-  const [candidates, setCandidates] = useState([]);
+  // Removed 'candidates' since it's unused and kept only setCandidates
+  const [, setCandidates] = useState([]);
   const [candidatesByPosition, setCandidatesByPosition] = useState({});
   const [candidateVotes, setCandidateVotes] = useState({});
   const [resultsList, setResultsList] = useState([]);
@@ -11,8 +12,6 @@ const ResultsCount = () => {
   const [isSubmitting, setIsSubmitting] = useState({});
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const [editingResult, setEditingResult] = useState(null);
-  const [editVotes, setEditVotes] = useState('');
   const [candidateTypes, setCandidateTypes] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [pollingStation, setPollingStation] = useState('Station A');

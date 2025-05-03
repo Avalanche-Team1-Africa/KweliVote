@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 /**
  * FingerprintEnrollment component
@@ -41,31 +41,21 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete }) => {
       description: "Finger Minutiae Record Format"
     }
   });
-  
-  // Initialize SDK when component mounts
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.Fingerprint) {
-      // Initialize the SDK with client URI from environment variables
-      sdk.current = new window.Fingerprint.WebApi({
-        useClient: true,
-        clientURI: process.env.REACT_APP_FINGERPRINT_CLIENT_URI || "http://localhost:15896"
-      });
-      
-      // Set up event handlers
-      setupEventHandlers();
-      
-      // Cleanup when component unmounts
-      return () => {
-        cleanupEventHandlers();
-        stopCapture();
-      };
-    } else {
-      setError('Fingerprint SDK not loaded. Please ensure "fingerprint.sdk.min.js" and "websdk.client.bundle.min.js" are included in your page.');
+
+  // Stop fingerprint capture - using useCallback to avoid dependency issues
+  const stopCapture = useCallback(async () => {
+    if (sdk.current && isScanning) {
+      try {
+        await sdk.current.stopAcquisition(selectedReader);
+      } catch (err) {
+        console.error('Error stopping capture:', err);
+      }
+      setIsScanning(false);
     }
-  }, []);
+  }, [isScanning, selectedReader]);
   
-  // Set up SDK event handlers
-  const setupEventHandlers = () => {
+  // Set up SDK event handlers - using useCallback to avoid dependency issues
+  const setupEventHandlers = useCallback(() => {
     if (!sdk.current) return;
     
     // Device connected event
@@ -122,7 +112,29 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete }) => {
       setError('Communication with the fingerprint reader failed. Please check your connection.');
       setIsScanning(false);
     };
-  };
+  }, []);
+  
+  // Initialize SDK when component mounts
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.Fingerprint) {
+      // Initialize the SDK with client URI from environment variables
+      sdk.current = new window.Fingerprint.WebApi({
+        useClient: true,
+        clientURI: process.env.REACT_APP_FINGERPRINT_CLIENT_URI || "http://localhost:15896"
+      });
+      
+      // Set up event handlers
+      setupEventHandlers();
+      
+      // Cleanup when component unmounts
+      return () => {
+        cleanupEventHandlers();
+        stopCapture();
+      };
+    } else {
+      setError('Fingerprint SDK not loaded. Please ensure "fingerprint.sdk.min.js" and "websdk.client.bundle.min.js" are included in your page.');
+    }
+  }, [setupEventHandlers, stopCapture]);
   
   // Clean up event handlers
   const cleanupEventHandlers = () => {
@@ -223,18 +235,6 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete }) => {
       setMessage(`Please place your finger on the reader (Scan ${scanCount + 1} of ${totalScansNeeded})`);
     } catch (err) {
       setError(`Failed to start capture: ${err.message}`);
-    }
-  };
-  
-  // Stop fingerprint capture
-  const stopCapture = async () => {
-    if (sdk.current && isScanning) {
-      try {
-        await sdk.current.stopAcquisition(selectedReader);
-      } catch (err) {
-        console.error('Error stopping capture:', err);
-      }
-      setIsScanning(false);
     }
   };
   

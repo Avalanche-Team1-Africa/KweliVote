@@ -7,20 +7,20 @@ const handleApiError = (error) => {
   
   // Handle network errors
   if (error.message === 'Failed to fetch') {
-    throw new Error('Network error. Check if the server is running.');
+    return new Error('Network error. Check if the server is running.');
   }
   
   // Handle API response errors
   if (error.response) {
     // The request was made, but the server responded with an error
     if (error.response.data && error.response.data.detail) {
-      throw new Error(error.response.data.detail);
+      return new Error(error.response.data.detail);
     }
-    throw new Error(`Server error: ${error.response.status}`);
+    return new Error(`Server error: ${error.response.status}`);
   }
   
   // Generic error
-  throw error;
+  return error;
 };
 
 // Authentication API functions
@@ -329,10 +329,13 @@ export const resultsAPI = {
   }
 };
 
-export default {
+// Create a named object for the default export
+const apiServices = {
   auth: authAPI,
   voter: voterAPI,
   keyperson: keypersonAPI,
   candidate: candidateAPI,
   results: resultsAPI,
 };
+
+export default apiServices;

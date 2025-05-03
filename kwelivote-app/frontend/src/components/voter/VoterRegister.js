@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import VoterStep1 from './VoterStep1';
 import VoterStep2 from './VoterStep2';
 import { voterAPI } from '../../utils/api';
-import blockchainService from '../../services/BlockchainService';
 
 const VoterRegister = () => {
   const [currentStep, setCurrentStep] = useState(1);
@@ -27,10 +26,6 @@ const VoterRegister = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
-  const [blockchainStatus, setBlockchainStatus] = useState({
-    initialized: false,
-    message: 'Not connected to blockchain'
-  });
   
   // Search-related states
   const [searchTerm, setSearchTerm] = useState('');
@@ -39,29 +34,6 @@ const VoterRegister = () => {
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingVoterId, setEditingVoterId] = useState(null);
-  
-  // Initialize blockchain service when component mounts
-  useEffect(() => {
-    const initBlockchain = async () => {
-      try {
-        const isInitialized = await blockchainService.initialize();
-        setBlockchainStatus({
-          initialized: isInitialized,
-          message: isInitialized 
-            ? 'Connected to Avalanche blockchain' 
-            : 'Blockchain not configured. Admin setup required.'
-        });
-      } catch (err) {
-        console.error('Failed to initialize blockchain service:', err);
-        setBlockchainStatus({
-          initialized: false,
-          message: `Blockchain initialization error: ${err.message}`
-        });
-      }
-    };
-    
-    initBlockchain();
-  }, []);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -159,24 +131,6 @@ const VoterRegister = () => {
     }
   };
   
-  const cancelEdit = () => {
-    // Clear form and reset state
-    setFormData({
-      nationalid: '',
-      firstname: '',
-      middlename: '',
-      surname: '',
-      designatedPollingStation: '',
-      biometricData: null,
-      biometricImage: null,
-    });
-    setFingerprintTemplate(null);
-    setDidInfo(null);
-    setIsEditMode(false);
-    setEditingVoterId(null);
-    setCurrentStep(1);
-  };
-  
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -196,53 +150,17 @@ const VoterRegister = () => {
         created_by: userInfo.username || 'system', // Use the logged-in username or default to 'system'
       };
       
-      // Track blockchain transaction status
-      let blockchainTxHash = null;
-      let voterDID = '';
-      
       if (!isEditMode) {
         // For new voters, use the DID generated from the biometric data if available
         if (didInfo && didInfo.didKey) {
           console.log('Using biometrically-generated DID:', didInfo.didKey);
           voterData.did = didInfo.didKey;
-          voterDID = didInfo.didKey;
           
           // Optionally store the public key in a safe place - production systems would use a secure key management service
           console.log('Public key:', didInfo.publicKey);
-          
-          // IMPORTANT: In a production system, the private key would be managed differently
-          // For demonstration purposes only, we're logging it here
-          console.log('SECURE INFO - Private key (should be stored securely):', didInfo.privateKey);
-          
-          // Store DID on Avalanche blockchain if service is initialized
-          if (blockchainStatus.initialized) {
-            try {
-              console.log('Storing voter DID on Avalanche blockchain...');
-              const blockchainResult = await blockchainService.registerVoterDID(
-                didInfo.didKey, 
-                formData.nationalid
-              );
-              
-              if (blockchainResult.success) {
-                console.log('DID registered on blockchain successfully!');
-                blockchainTxHash = blockchainResult.transactionHash;
-                
-                // Add blockchain transaction ID to voter data
-                voterData.blockchain_tx_id = blockchainTxHash;
-              } else {
-                console.error('Failed to register DID on blockchain:', blockchainResult.error);
-              }
-            } catch (blockchainError) {
-              console.error('Blockchain error:', blockchainError);
-              // Continue with database registration even if blockchain fails
-            }
-          } else {
-            console.log('Blockchain not initialized. DID will only be stored in database.');
-          }
         } else {
           // Fallback to a basic DID if no biometric-based DID is available
           voterData.did = `did:example:${formData.nationalid}`;
-          voterDID = voterData.did;
           console.log('Using fallback DID:', voterData.did);
         }
         
@@ -267,46 +185,16 @@ const VoterRegister = () => {
           }
         }
         
-        setSuccessMessage(
-          blockchainTxHash 
-            ? `Voter registered successfully! DID stored on Avalanche blockchain (tx: ${blockchainTxHash.substring(0, 10)}...)`
-            : 'Voter registered successfully with blockchain identity!'
-        );
+        setSuccessMessage('Voter registered successfully!');
       } else {
         // For existing voters, update the record
         // If we have a new biometrically generated DID, use it to update
         if (didInfo && didInfo.didKey) {
           voterData.did = didInfo.didKey;
-          voterDID = didInfo.didKey;
           console.log('Updating with new biometrically-generated DID:', didInfo.didKey);
-          
-          // Update DID on blockchain if service is initialized
-          if (blockchainStatus.initialized) {
-            try {
-              console.log('Updating voter DID on Avalanche blockchain...');
-              const blockchainResult = await blockchainService.registerVoterDID(
-                didInfo.didKey, 
-                formData.nationalid
-              );
-              
-              if (blockchainResult.success) {
-                console.log('DID updated on blockchain successfully!');
-                blockchainTxHash = blockchainResult.transactionHash;
-                
-                // Add blockchain transaction ID to voter data
-                voterData.blockchain_tx_id = blockchainTxHash;
-              } else {
-                console.error('Failed to update DID on blockchain:', blockchainResult.error);
-              }
-            } catch (blockchainError) {
-              console.error('Blockchain error:', blockchainError);
-              // Continue with database update even if blockchain fails
-            }
-          }
         } else {
           // Otherwise keep the existing DID or use a fallback
           voterData.did = formData.did || `did:example:${formData.nationalid}`;
-          voterDID = voterData.did;
         }
         
         const updatedVoter = await voterAPI.updateVoter(editingVoterId, voterData);
@@ -315,7 +203,7 @@ const VoterRegister = () => {
         // Handle biometric data for updates if provided
         if (fingerprintTemplate) {
           try {
-            // If we have both fingerprint template and DID info, update all biometric and blockchain data
+            // If we have both fingerprint template and DID info, update all biometric and DID data
             if (didInfo && didInfo.didKey) {
               const biometricDidResult = await voterAPI.updateVoterBiometricAndDID(
                 editingVoterId,
@@ -324,11 +212,10 @@ const VoterRegister = () => {
                   biometric_template: fingerprintTemplate,
                   did: didInfo.didKey,
                   privateKey: didInfo.privateKey,
-                  publicKey: didInfo.publicKey,
-                  blockchain_tx_id: blockchainTxHash
+                  publicKey: didInfo.publicKey
                 }
               );
-              console.log('All biometric and blockchain data updated:', biometricDidResult);
+              console.log('All biometric and DID data updated:', biometricDidResult);
             } else {
               // Fall back to just updating the template if no DID info is available
               const templateResult = await voterAPI.saveBiometricTemplate(
@@ -342,11 +229,7 @@ const VoterRegister = () => {
           }
         }
         
-        setSuccessMessage(
-          blockchainTxHash 
-            ? `Voter updated successfully! DID updated on Avalanche blockchain (tx: ${blockchainTxHash.substring(0, 10)}...)`
-            : 'Voter updated successfully with blockchain identity!'
-        );
+        setSuccessMessage('Voter updated successfully!');
         
         // Reset edit mode after successful update
         setIsEditMode(false);

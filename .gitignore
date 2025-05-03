@@ -156,3 +156,8 @@ __snapshots__/
 *.orig
 *.rej
 *.patch
+
+# =====================
+# 🔐 Secure Data
+# =====================
+kwelivote-app/backend/secure/*.csv
