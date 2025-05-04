@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import apiServices from '../../utils/api';
 
 /**
  * FingerprintEnrollment component
@@ -462,16 +461,9 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete }) => {
     try {
       console.log("Finalizing template with fingerprints:", bioDataRef.current.fingerprints.length);
       
-      // Transform fingerprint data into the requested format
-      const transformedFingerprints = bioDataRef.current.fingerprints.map(fp => ({
-        finger: `Scan ${fp.scanIndex}`,
-        sample: fp.sample
-      }));
-      
-      // Create the final template with the new format
+      // Create the final template
       const template = {
-        userId: bioDataRef.current.userId,
-        fingerprints: transformedFingerprints,
+        ...bioDataRef.current,
         finalizedAt: new Date().toISOString()
       };
       

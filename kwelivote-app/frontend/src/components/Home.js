@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import FingerprintTemplateTest from './fingerprints/FingerprintTemplateTest';
 
 const Home = () => {
   const navigate = useNavigate();
@@ -66,6 +67,9 @@ const Home = () => {
 
   return (
     <div className="max-w-4xl mx-auto animate-slide-up">
+      {/* Fingerprint Template Testing Component */}
+      <FingerprintTemplateTest />
+      
       <div className="text-center mb-10">
         <div className="inline-flex items-center justify-center w-24 h-24 bg-kweli-light rounded-full mb-6 shadow-soft">
           <img 

@@ -378,6 +378,19 @@ export const resultsAPI = {
   }
 };
 
+// Fingerprint processing API functions
+export const fingerprintAPI = {
+  // Process fingerprint templates with proper authentication
+  async processTemplate(template) {
+    // We're sending the template data directly without nesting it under a 'template' property
+    return authenticatedRequest(
+      `${API_BASE_URL}/fingerprints/process-fingerprint-template/`,
+      'POST',
+      template
+    );
+  }
+};
+
 // Create a named object for the default export
 const apiServices = {
   auth: authAPI,
@@ -385,6 +398,7 @@ const apiServices = {
   keyperson: keypersonAPI,
   candidate: candidateAPI,
   results: resultsAPI,
+  fingerprint: fingerprintAPI,  // Add the new fingerprint API service
 };
 
 export default apiServices;

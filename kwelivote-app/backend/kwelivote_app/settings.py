@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'corsheaders',
     'kwelivote_app',
+    'iso_fingerprint_template_app',
 ]
 
 MIDDLEWARE = [

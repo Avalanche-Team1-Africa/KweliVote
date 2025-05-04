@@ -33,6 +33,9 @@ const VoterStep2 = ({ formData, prevStep, handleSubmit, isSubmitting = false, on
         setCurrentStep('fingerprint');
         setLocalFingerprintError(''); // Clear any previous errors
 
+        // Log the final fingerprint template
+        console.log('Final fingerprint template generated:', JSON.stringify(fingerprintTemplate, null, 2));
+
         const originalConsoleLog = console.log;
         console.log = (message) => {
           originalConsoleLog(message);

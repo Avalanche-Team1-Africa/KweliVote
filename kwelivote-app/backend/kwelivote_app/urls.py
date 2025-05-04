@@ -67,6 +67,9 @@ urlpatterns = [
     path('api/voters/search/', search_voters, name='search_voters'),
     path('api/keypersons/search/', search_keypersons, name='search_keypersons'),
     
+    # Fingerprint template processing endpoints
+    path('api/fingerprints/', include('iso_fingerprint_template_app.urls')),
+    
     path('api/voters/', include(router.urls)),
     path('api/keypersons/', include(router.urls)),
 ]

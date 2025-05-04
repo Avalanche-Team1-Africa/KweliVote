@@ -82,6 +82,99 @@ The system securely stores voter DIDs on the blockchain:
 | Observers | Validate results count |
 | Presiding Officers | Validate results count |
 
+## Installing Biometric Processing Tools
+
+### ImageMagick Installation
+
+ImageMagick is used for image processing and conversion of fingerprint images.
+
+1. **Install via package manager:**
+   ```bash
+   sudo apt update
+   sudo apt install imagemagick
+   ```
+
+2. **Verify installation:**
+   ```bash
+   convert --version
+   ```
+
+### NIST Biometric Image Software (NBIS) Installation
+
+NBIS provides essential tools for fingerprint minutiae extraction and template conversion.
+
+1. **Install build dependencies:**
+   ```bash
+   sudo apt update
+   sudo apt install build-essential libpng-dev libjpeg-dev git
+   ```
+
+2. **Download NBIS source code from GitHub:**
+   ```bash
+   mkdir -p ~/nbis_build
+   cd ~/nbis_build
+   git clone https://github.com/usnistgov/nbis.git nbis_source
+   ```
+
+3. **Setup build environment:**
+   ```bash
+   cd ~/nbis_build
+   # Create a build directory
+   mkdir -p ~/nbis_build/nbis
+   ```
+
+4. **Configure and build NBIS:**
+   ```bash
+   cd ~/nbis_build/nbis_source
+   ./setup.sh ~/nbis_build/nbis
+   cd ~/nbis_build/nbis
+   make config
+   make it
+   ```
+   Note: The build process may show some warnings which can usually be ignored. The build might not complete fully but as long as the key components are built, we can proceed.
+
+5. **Compile key tools:**
+   ```bash
+   cd ~/nbis_build/nbis/mindtct/src/bin/mindtct && make
+   cd ~/nbis_build/nbis/bozorth3/src/bin/bozorth3 && make
+   ```
+
+6. **Install libraries and executables:**
+   ```bash
+   # Install libraries
+   sudo cp -r ~/nbis_build/nbis/exports/lib/* /usr/local/lib/
+   sudo cp -r ~/nbis_build/nbis/exports/include/* /usr/local/include/
+   sudo ldconfig
+   
+   # Install binaries
+   sudo mkdir -p /usr/local/bin
+   sudo cp ~/nbis_build/nbis/mindtct/bin/mindtct /usr/local/bin/
+   sudo cp ~/nbis_build/nbis/bozorth3/bin/bozorth3 /usr/local/bin/
+   ```
+
+7. **Verify installation:**
+   ```bash
+   # Check if executables are in path
+   which mindtct
+   which bozorth3
+   ```
+
+#### Using NBIS Tools for Fingerprint Processing
+
+The key tools installed are:
+
+- **mindtct**: Extracts minutiae data from fingerprint images
+- **bozorth3**: Matches fingerprint minutiae and generates comparison scores
+
+Example usage:
+```bash
+# Extract minutiae from a fingerprint image
+mindtct fingerprint.png output_prefix
+
+# Compare two fingerprints (returns a match score)
+bozorth3 fingerprint1.xyt fingerprint2.xyt
+```
+
 ## Setup Instructions
 
 ### Backend Setup (Django)

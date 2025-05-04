@@ -42,6 +42,9 @@ const KeypersonStep2 = ({ formData, nextStep, prevStep, isObserver, onEnrollment
         setCurrentStep('fingerprint');
         setLocalFingerprintError(''); // Clear any previous errors
 
+        // Log the final fingerprint template
+        console.log('Final fingerprint template generated for keyperson:', JSON.stringify(fingerprintTemplate, null, 2));
+
         const originalConsoleLog = console.log;
         console.log = (message) => {
           originalConsoleLog(message);
