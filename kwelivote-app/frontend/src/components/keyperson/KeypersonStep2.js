@@ -2,11 +2,8 @@ import React, { useState, useEffect } from 'react';
 import FingerprintEnrollment from '../voter/FingerprintEnrollment'; // Reuse the voter component
 import biometricToDID from '../../utils/biometricToDID';
 
-const KeypersonStep2 = ({ formData, handleFileChange, nextStep, prevStep, isObserver, onEnrollmentComplete, isEditMode, handleSubmit, error, successMessage, isSubmitting, showSuccess }) => {
-  const [dragActive, setDragActive] = useState(false);
-  const [useFingerPrintReader, setUseFingerPrintReader] = useState(false);
+const KeypersonStep2 = ({ formData, nextStep, prevStep, isObserver, onEnrollmentComplete, isEditMode, handleSubmit, error, successMessage, isSubmitting, showSuccess }) => {
   const [fingerprintTemplate, setFingerprintTemplate] = useState(null);
-  const [isDetectingFingerprint, setIsDetectingFingerprint] = useState(false);
   const [showLocalSuccess, setShowLocalSuccess] = useState(false);
   const [localSuccessMessage] = useState('');
   const [localError, setLocalError] = useState('');
@@ -110,162 +107,11 @@ const KeypersonStep2 = ({ formData, handleFileChange, nextStep, prevStep, isObse
     prevStep();
   };
 
-  const handleDrag = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === 'dragenter' || e.type === 'dragover') {
-      setDragActive(true);
-    } else if (e.type === 'dragleave') {
-      setDragActive(false);
-    }
-  };
-
   const handleEnrollmentComplete = (templateData) => {
     setFingerprintTemplate(templateData);
     // Pass the data up to the parent component
     if (onEnrollmentComplete) {
       onEnrollmentComplete(templateData);
-    }
-  };
-  
-  // Custom file change handler that includes fingerprint detection
-  const handleFileChangeWithDetection = async (e) => {
-    const { name, files } = e.target;
-    if (files && files[0]) {
-      // Call original handler to update form data
-      handleFileChange(e);
-      
-      // If this is a biometric image, detect if it's a fingerprint
-      if (name === 'biometricImage') {
-        await detectFingerprint(files[0]);
-      }
-    }
-  };
-  
-  // Function to detect if the uploaded image is a fingerprint
-  const detectFingerprint = async (file) => {
-    // Only process image files
-    if (!file.type.startsWith('image/')) {
-      return;
-    }
-    
-    setIsDetectingFingerprint(true);
-    setLocalFingerprintError(''); // Clear previous errors
-    
-    try {
-      // Read the file as data URL
-      const reader = new FileReader();
-      
-      reader.onload = async (event) => {
-        const image = new Image();
-        image.onload = () => {
-          // Use a simple heuristic approach to detect fingerprints:
-          // 1. Check image aspect ratio (fingerprints are typically square-ish)
-          // 2. Analyze pixel intensity distribution (fingerprints have specific patterns)
-          
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          canvas.width = image.width;
-          canvas.height = image.height;
-          ctx.drawImage(image, 0, 0);
-          
-          // Get image data
-          const imageData = ctx.getImageData(0, 0, image.width, image.height);
-          const data = imageData.data;
-          
-          // Calculate aspect ratio - fingerprints are usually close to square
-          const aspectRatio = image.width / image.height;
-          const isSquarish = aspectRatio >= 0.7 && aspectRatio <= 1.4;
-          
-          // Check for ridge-like patterns (simplified heuristic)
-          // Count transitions between light and dark pixels
-          let ridgePatterns = 0;
-          const threshold = 90; // Threshold for light vs dark
-          
-          // Sample every 10th pixel in rows and columns for performance
-          for (let y = 0; y < image.height; y += 10) {
-            let lastWasLight = false;
-            for (let x = 0; x < image.width; x += 10) {
-              const idx = (y * image.width + x) * 4;
-              // Convert to grayscale intensity
-              const gray = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
-              const isLight = gray > threshold;
-              
-              if (isLight !== lastWasLight) {
-                ridgePatterns++;
-                lastWasLight = isLight;
-              }
-            }
-          }
-          
-          // Check for sufficient ridge transitions
-          // Fingerprints typically have many transitions due to ridge patterns
-          const hasRidgePatterns = ridgePatterns > (image.width + image.height) / 8;
-          
-          // If it looks like a fingerprint
-          if (isSquarish && hasRidgePatterns) {
-            console.log('Fingerprint detected!');
-            
-            // Generate a template based on the uploaded fingerprint
-            generateFingerprintTemplate(file);
-          } else {
-            console.log('Not a fingerprint or low-quality fingerprint');
-            setIsDetectingFingerprint(false);
-            setLocalFingerprintError('The uploaded image does not appear to be a valid fingerprint or is of low quality. Please upload a clearer fingerprint image.');
-          }
-        };
-        
-        image.src = event.target.result;
-      };
-      
-      reader.readAsDataURL(file);
-    } catch (error) {
-      console.error('Error detecting fingerprint:', error);
-      setIsDetectingFingerprint(false);
-      setLocalFingerprintError(`Error analyzing fingerprint: ${error.message}`);
-    }
-  };
-  
-  // Generate fingerprint template from an uploaded fingerprint image
-  const generateFingerprintTemplate = (file) => {
-    try {
-      const reader = new FileReader();
-      
-      reader.onload = (event) => {
-        // Create template structure similar to what the fingerprint reader produces
-        const template = {
-          userId: formData.nationalid || 'unknown',
-          fingerprints: [{
-            format: "ANSI-INCITS 378-2004",
-            quality: "Medium", // Default quality for uploaded images
-            timestamp: new Date().toISOString(),
-            scanIndex: 1,
-            // Store base64 representation of the image
-            sample: event.target.result.split(',')[1] // Remove data:image part
-          }],
-          createdAt: new Date().toISOString(),
-          source: "uploaded", // Indicate this was an uploaded file, not a live scan
-          formatInfo: {
-            name: "ANSI-INCITS 378-2004",
-            type: "ISO/IEC 19794-2",
-            description: "Finger Minutiae Record Format"
-          }
-        };
-        
-        // Set the template and notify parent component
-        setFingerprintTemplate(template);
-        
-        // Note: We don't need to call onEnrollmentComplete here
-        // The useEffect that watches fingerprintTemplate will trigger the DID generation
-        // and setDidResult, which will then be passed to the parent via onEnrollmentComplete in handleNext
-        
-        setIsDetectingFingerprint(false);
-      };
-      
-      reader.readAsDataURL(file);
-    } catch (error) {
-      console.error('Error generating fingerprint template:', error);
-      setIsDetectingFingerprint(false);
     }
   };
 
@@ -307,122 +153,17 @@ const KeypersonStep2 = ({ formData, handleFileChange, nextStep, prevStep, isObse
         </div>
         
         <p className="text-gray-600 mb-6 text-sm">
-          Biometric data is optional and can be left blank. You can either use the fingerprint reader or upload existing biometric data files.
+          {isEditMode 
+            ? 'Update biometric data if needed or skip this step to keep existing biometric data.' 
+            : 'Please use the fingerprint reader to collect biometric data for keyperson registration.'}
         </p>
         
-        {/* Biometric collection method toggle */}
-        <div className="mb-6">
-          <div className="flex space-x-4">
-            <button
-              type="button"
-              onClick={() => setUseFingerPrintReader(false)}
-              className={`flex-1 py-3 px-4 rounded-lg border-2 text-center ${!useFingerPrintReader 
-                ? 'border-kweli-primary bg-kweli-primary/5 text-kweli-primary' 
-                : 'border-gray-200 bg-white text-gray-500'}`}
-            >
-              Upload Files
-            </button>
-            <button
-              type="button"
-              onClick={() => setUseFingerPrintReader(true)}
-              className={`flex-1 py-3 px-4 rounded-lg border-2 text-center ${useFingerPrintReader 
-                ? 'border-kweli-primary bg-kweli-primary/5 text-kweli-primary' 
-                : 'border-gray-200 bg-white text-gray-500'}`}
-            >
-              Use Fingerprint Reader
-            </button>
-          </div>
-        </div>
-        
-        {/* Show either fingerprint reader or file upload based on toggle */}
-        {useFingerPrintReader ? (
-          <FingerprintEnrollment 
-            nationalId={formData.nationalid} 
-            onEnrollmentComplete={handleEnrollmentComplete}
-            requiredScans={5}
-          />
-        ) : (
-          <div className="space-y-2">
-            <label htmlFor="biometricImage" className="block text-xs font-medium text-gray-700 mb-1">
-              Fingerprint Image
-            </label>
-            <div 
-              className={`relative border-2 border-dashed rounded-lg p-3 text-center transition-colors ${
-                dragActive ? 'border-kweli-primary bg-kweli-primary/5' : 'border-gray-300 bg-gray-50'
-              }`}
-              onDragEnter={handleDrag}
-              onDragOver={handleDrag}
-              onDragLeave={handleDrag}
-              style={{ minHeight: '100px' }}
-            >
-              {!formData.biometricImage || isDetectingFingerprint ? (
-                <div className="flex items-center justify-center h-full">
-                  <div className="flex flex-row items-center gap-3">
-                    <svg className="h-8 w-8 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                    </svg>
-                    <div>
-                      <label htmlFor="biometricImage" className="cursor-pointer text-kweli-primary hover:text-kweli-secondary transition-colors text-sm">
-                        <span>Click to upload fingerprint</span>
-                        <input
-                          type="file"
-                          id="biometricImage"
-                          name="biometricImage"
-                          onChange={handleFileChangeWithDetection}
-                          accept="image/*"
-                          className="sr-only"
-                        />
-                      </label>
-                      <p className="mt-1 text-xs text-gray-500">PNG, JPG up to 10MB</p>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-center justify-center py-2">
-                  <div className="flex items-center">
-                    <svg className="h-5 w-5 text-green-500 mr-2 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                    <span className="text-sm font-medium text-gray-700 truncate">{formData.biometricImage.name}</span>
-                    {fingerprintTemplate && (
-                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                        Fingerprint Detected
-                      </span>
-                    )}
-                    <button 
-                      type="button" 
-                      onClick={() => {
-                        handleFileChange({ target: { name: 'biometricImage', value: null } });
-                        setFingerprintTemplate(null);
-                        setDidResult(null);
-                        setCurrentStep(null);
-                        setLocalFingerprintError('');
-                      }}
-                      className="ml-2 text-gray-500 hover:text-red-500"
-                      title="Remove file"
-                    >
-                      <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414z" clipRule="evenodd" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              )}
-              
-              {isDetectingFingerprint && (
-                <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-90 rounded-lg">
-                  <div className="flex items-center">
-                    <svg className="animate-spin h-5 w-5 text-blue-500 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span className="text-sm font-medium text-blue-700">Analyzing fingerprint...</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+        {/* Fingerprint reader is now the only option */}
+        <FingerprintEnrollment 
+          nationalId={formData.nationalid} 
+          onEnrollmentComplete={handleEnrollmentComplete}
+          requiredScans={5}
+        />
         
         {/* DID workflow visualization if fingerprint template exists */}
         {fingerprintTemplate && (

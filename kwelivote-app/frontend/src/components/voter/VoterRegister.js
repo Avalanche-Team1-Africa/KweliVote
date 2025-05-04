@@ -153,15 +153,16 @@ const VoterRegister = () => {
       if (!isEditMode) {
         // For new voters, use the DID generated from the biometric data if available
         if (didInfo && didInfo.didKey) {
+          // If we have DID info from biometric enrollment, use it
           console.log('Using biometrically-generated DID:', didInfo.didKey);
           voterData.did = didInfo.didKey;
           
           // Optionally store the public key in a safe place - production systems would use a secure key management service
           console.log('Public key:', didInfo.publicKey);
         } else {
-          // Fallback to a basic DID if no biometric-based DID is available
-          voterData.did = `did:example:${formData.nationalid}`;
-          console.log('Using fallback DID:', voterData.did);
+          // Don't set a DID if no biometric-based DID is available
+          // The backend will handle this situation appropriately
+          console.log('No biometric DID available');
         }
         
         voterData.has_template = fingerprintTemplate !== null;

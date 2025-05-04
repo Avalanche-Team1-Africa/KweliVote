@@ -228,8 +228,8 @@ const KeypersonRegister = () => {
           keypersonData.did = didInfo.didKey;
           console.log('Using biometrically-generated DID:', didInfo.didKey);
         } else {
-          // Otherwise use a fallback
-          keypersonData.did = `did:example:${formData.nationalid}`;
+          // Don't set a fallback DID, let the backend handle it
+          console.log('No biometrically-generated DID available');
         }
         
         // Use the transaction-based endpoint for new keypersons
@@ -253,10 +253,11 @@ const KeypersonRegister = () => {
         if (didInfo && didInfo.didKey) {
           keypersonData.did = didInfo.didKey;
           console.log('Updating with new biometrically-generated DID:', didInfo.didKey);
-        } else {
-          // Keep the existing DID or use a fallback
-          keypersonData.did = formData.did || `did:example:${formData.nationalid}`;
+        } else if (formData.did) {
+          // Keep the existing DID if available
+          keypersonData.did = formData.did;
         }
+        // No fallback DID is set - if no DID is available, let the backend handle it
         
         // Skip user account details when updating
         const updatedKeyperson = await keypersonAPI.updateKeyperson(editingKeypersonId, keypersonData);

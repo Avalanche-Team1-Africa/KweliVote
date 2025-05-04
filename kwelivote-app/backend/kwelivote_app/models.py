@@ -75,7 +75,7 @@ class Voter(models.Model):
     middlename = models.CharField(max_length=100, blank=True, null=True)
     surname = models.CharField(max_length=100)
     nationalid = models.CharField(primary_key=True, max_length=20)
-    did = models.CharField(max_length=255)
+    did = models.CharField(max_length=255, blank=True, null=True)
     designated_polling_station = models.CharField(max_length=100)
     
     # Biometric data fields
