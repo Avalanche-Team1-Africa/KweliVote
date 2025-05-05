@@ -23,42 +23,58 @@ function bytesToHex(bytes) {
 /**
  * STEP 1: Extract Template (e.g., ANSI-378)
  * 
- * In a production environment, this would use a proper fingerprint SDK
- * to extract features from the raw scan. For this implementation, we'll assume
- * the template is already extracted and simply normalize it.
+ * This function uses the standardized ISO template from the backend API.
+ * The ISO template is mandatory - no fallback to raw fingerprint data.
  * 
- * @param {Object} fingerprintTemplate - The extracted ANSI-378 template
- * @returns {Uint8Array} Normalized binary representation of the template
+ * @param {Object} fingerprintTemplate - The fingerprint template object with ISO data
+ * @returns {Uint8Array} Binary representation of the ISO template
+ * @throws {Error} If ISO template is not available
  */
 export const extractTemplate = (fingerprintTemplate) => {
-  console.log("STEP 1: Extracting template features from fingerprint data");
-  
-  // In production: Use a proper SDK to extract features
-  // For this implementation: Just normalize the provided template
+  console.log("STEP 1: Extracting standardized ISO template from fingerprint data");
   
   // Check if template has the expected structure
-  if (!fingerprintTemplate || !fingerprintTemplate.fingerprints || fingerprintTemplate.fingerprints.length === 0) {
-    throw new Error("Invalid fingerprint template structure");
+  if (!fingerprintTemplate) {
+    throw new Error("Invalid fingerprint template structure - template object is null or undefined");
   }
   
-  // Get the first fingerprint from the template
-  const firstScan = fingerprintTemplate.fingerprints[0];
-  
-  // If we have a sample, use it; otherwise stringify the entire fingerprint object
-  let templateStr;
-  if (firstScan.sample) {
-    // If sample is a base64 string, use it directly
-    templateStr = typeof firstScan.sample === 'string' 
-      ? firstScan.sample 
-      : JSON.stringify(firstScan.sample);
-  } else {
-    // Fallback to using the entire fingerprint object
-    templateStr = JSON.stringify(firstScan);
+  // ISO template is mandatory - check if it exists
+  if (!fingerprintTemplate.iso_template_base64) {
+    console.error("Missing ISO template in fingerprint data", fingerprintTemplate);
+    throw new Error("ISO template is mandatory but not available in the fingerprint data");
   }
   
-  // Convert to Uint8Array for further processing
-  const encoder = new TextEncoder();
-  return encoder.encode(templateStr);
+  console.log("ISO template found - processing standardized biometric data");
+  
+  try {
+    // Convert base64 ISO template to binary
+    const binaryString = window.atob(fingerprintTemplate.iso_template_base64);
+    const bytes = new Uint8Array(binaryString.length);
+    
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    
+    console.log(`ISO template successfully processed: ${bytes.length} bytes of standardized data`);
+    console.log(`ISO template format: ISO/IEC 19794-2 Finger Minutiae Record`);
+    
+    // Check if the template has the expected minimum size
+    if (bytes.length < 10) {
+      console.error("ISO template is too small, possibly corrupted");
+      throw new Error("Invalid ISO template: insufficient data");
+    }
+    
+    // Log first few bytes as hexadecimal for debugging (format identifier)
+    const formatBytes = Array.from(bytes.slice(0, 4))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join(' ');
+    console.log(`ISO template format identifier bytes: ${formatBytes}`);
+    
+    return bytes;
+  } catch (error) {
+    console.error("Error converting ISO template:", error);
+    throw new Error(`Failed to process ISO template: ${error.message}`);
+  }
 };
 
 /**

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import apiServices from '../../utils/api';
+import processFingerprintTemplate from '../../utils/FingerprintTemplateProcessor';
 
 /**
  * FingerprintEnrollment component
@@ -453,44 +454,62 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete }) => {
     
     // Short delay to show processing message
     setTimeout(() => {
-      finalizeFingerprintTemplate();
+      processAndFinalizeFingerprintTemplate();
     }, 500);
   };
   
-  // Finalize the template when all scans are completed
-  const finalizeFingerprintTemplate = () => {
+  // Process fingerprint data through backend API and finalize template
+  const processAndFinalizeFingerprintTemplate = async () => {
     try {
-      console.log("Finalizing template with fingerprints:", bioDataRef.current.fingerprints.length);
+      console.log("Processing fingerprint data with backend API...");
       
-      // Transform fingerprint data into the requested format
+      // Transform fingerprint data into the requested format with "Scan X" format
       const transformedFingerprints = bioDataRef.current.fingerprints.map(fp => ({
         finger: `Scan ${fp.scanIndex}`,
         sample: fp.sample
       }));
       
-      // Create the final template with the new format
-      const template = {
+      // Create the template with the format expected by the API
+      const templateData = {
+        fingerprints: transformedFingerprints
+      };
+      
+      // Log the template being sent to the API
+      console.log('Sending fingerprint data to backend API:', templateData);
+      
+      // Send to the backend API
+      const apiResponse = await processFingerprintTemplate(templateData);
+      console.log('Received ISO template from API:', apiResponse);
+      
+      if (!apiResponse || apiResponse.processing_status !== 'completed') {
+        throw new Error(`API processing failed: ${apiResponse?.error_message || 'Unknown error'}`);
+      }
+      
+      // Create the final template incorporating the API response
+      const finalTemplate = {
         userId: bioDataRef.current.userId,
         fingerprints: transformedFingerprints,
+        iso_template_id: apiResponse.id,
+        iso_template_base64: apiResponse.iso_template_base64,
         finalizedAt: new Date().toISOString()
       };
       
       // Log the complete fingerprint template
-      console.log('COMPLETE FINGERPRINT TEMPLATE CREATED:', JSON.stringify(template, null, 2));
+      console.log('COMPLETE FINGERPRINT TEMPLATE CREATED WITH ISO DATA:', JSON.stringify(finalTemplate, null, 2));
       
       // Update state
-      setFingerprintTemplate(template);
+      setFingerprintTemplate(finalTemplate);
       setIsGenerating(false);
       
       // Call the callback if provided
       if (onEnrollmentComplete) {
-        onEnrollmentComplete(template);
+        onEnrollmentComplete(finalTemplate);
       }
       
-      setMessage("Template created successfully! DID generation process started.");
+      setMessage("Template created successfully! ISO template received and DID generation process started.");
     } catch (err) {
-      console.error("Error finalizing template:", err);
-      setError(`Failed to create template: ${err.message}`);
+      console.error("Error processing fingerprint template:", err);
+      setError(`Failed to process template: ${err.message}`);
       setIsGenerating(false);
     }
   };
