@@ -35,30 +35,71 @@ const VoterStep2 = ({ formData, prevStep, handleSubmit, isSubmitting = false, on
 
         // Log the final fingerprint template
         console.log('Final fingerprint template generated:', JSON.stringify(fingerprintTemplate, null, 2));
+        
+        // Verify that we have an ISO template from the API
+        if (!fingerprintTemplate.iso_template_base64) {
+          throw new Error('Missing ISO template base64 data from the API');
+        }
+        
+        console.log('Using received base64 ISO template from API for DID generation');
 
+        // Improved step detection with alternative pattern matching
         const originalConsoleLog = console.log;
         console.log = (message) => {
           originalConsoleLog(message);
           if (typeof message === 'string') {
-            if (message.includes("STEP 1")) setCurrentStep('template');
-            else if (message.includes("STEP 2")) setCurrentStep('stabilization');
-            else if (message.includes("STEP 3")) setCurrentStep('secretKey');
-            else if (message.includes("STEP 4")) setCurrentStep('hash');
-            else if (message.includes("STEP 5")) setCurrentStep('keyPair');
-            else if (message.includes("STEP 7")) setCurrentStep('did');
-
-            setConversionLog(prevLogs => [...prevLogs, message]);
+            // Enhanced pattern matching for step detection
+            if (message.includes("STEP 1") || message.includes("Extracting standardized ISO template")) {
+              setCurrentStep('template');
+              setConversionLog(prevLogs => [...prevLogs, "STEP 1: Extracting ISO template"]);
+            }
+            else if (message.includes("STEP 2") || message.includes("biometric stabilization")) {
+              setCurrentStep('stabilization');
+              setConversionLog(prevLogs => [...prevLogs, "STEP 2: Applying biometric stabilization"]);
+            }
+            else if (message.includes("STEP 3") || message.includes("stable secret key")) {
+              setCurrentStep('secretKey');
+              setConversionLog(prevLogs => [...prevLogs, "STEP 3: Generating stable secret key"]);
+            }
+            else if (message.includes("STEP 4") || message.includes("hash") || message.includes("SHA-256")) {
+              setCurrentStep('hash');
+              setConversionLog(prevLogs => [...prevLogs, "STEP 4: Creating cryptographic hash"]);
+            }
+            else if (message.includes("STEP 5") || message.includes("Deriving") || message.includes("key pair")) {
+              setCurrentStep('keyPair');
+              setConversionLog(prevLogs => [...prevLogs, "STEP 5: Generating cryptographic keypair"]);
+            }
+            else if (message.includes("STEP 7") || message.includes("DID:key") || message.includes("Generating DID")) {
+              setCurrentStep('did');
+              setConversionLog(prevLogs => [...prevLogs, "STEP 7: Creating DID from public key"]);
+            }
+            else if (message.includes("Starting biometric") || message.includes("✅") || message.includes("completed successfully")) {
+              setConversionLog(prevLogs => [...prevLogs, message]);
+            }
           }
         };
 
-        const result = biometricToDID(fingerprintTemplate, formData.nationalid);
-        setDidResult(result);
-
-        if (onDIDGenerated) {
-          onDIDGenerated(result);
-        }
-
-        console.log = originalConsoleLog;
+        // Force a small delay to ensure UI can show the initial step before proceeding
+        setTimeout(() => {
+          try {
+            const result = biometricToDID(fingerprintTemplate, formData.nationalid);
+            setDidResult(result);
+            
+            // Force the last step to be marked as complete
+            setCurrentStep('did');
+            
+            if (onDIDGenerated) {
+              onDIDGenerated(result);
+            }
+          } catch (error) {
+            console.error('Error during biometric to DID conversion:', error);
+            setConversionLog(prevLogs => [...prevLogs, `Error: ${error.message}`]);
+            setLocalFingerprintError(`Error during biometric to DID conversion: ${error.message}`);
+          }
+          
+          // Restore original console.log
+          console.log = originalConsoleLog;
+        }, 100);
       } catch (error) {
         console.error('Error during biometric to DID conversion:', error);
         setConversionLog(prevLogs => [...prevLogs, `Error: ${error.message}`]);
@@ -86,8 +127,13 @@ const VoterStep2 = ({ formData, prevStep, handleSubmit, isSubmitting = false, on
   };
 
   const handleEnrollmentComplete = (templateData) => {
-    // We no longer process fingerprint templates or DIDs
-    console.log('Biometric enrollment completed - data discarded as requested');
+    // Process fingerprint templates and generate DID
+    console.log('Biometric enrollment completed, setting template data');
+    setFingerprintTemplate(templateData);
+    
+    if (onEnrollmentComplete) {
+      onEnrollmentComplete(templateData);
+    }
   };
 
   const getStepColorClass = (stepId) => {
