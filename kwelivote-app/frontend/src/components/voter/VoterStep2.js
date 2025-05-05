@@ -86,10 +86,8 @@ const VoterStep2 = ({ formData, prevStep, handleSubmit, isSubmitting = false, on
   };
 
   const handleEnrollmentComplete = (templateData) => {
-    setFingerprintTemplate(templateData);
-    if (onEnrollmentComplete) {
-      onEnrollmentComplete(templateData);
-    }
+    // We no longer process fingerprint templates or DIDs
+    console.log('Biometric enrollment completed - data discarded as requested');
   };
 
   const getStepColorClass = (stepId) => {

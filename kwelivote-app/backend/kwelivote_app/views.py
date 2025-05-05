@@ -171,11 +171,11 @@ def create_keyperson_with_user(request):
                 'designated_polling_station': data.get('designated_polling_station'),
                 'observer_type': data.get('observer_type'),
                 'stakeholder': data.get('stakeholder'),
-                'did': data.get('did'),
                 'created_by': data.get('created_by', 'system'),
-                'biometric_data': data.get('biometric_data'),
-                'biometric_image': data.get('biometric_image')
             }
+            
+            # Remove fields that should not be handled (even if they're in the request data)
+            # Note: We simply don't include them in keyperson_data rather than having to remove them
             
             # Validate required keyperson fields
             required_fields = ['nationalid', 'firstname', 'surname', 'role', 'designated_polling_station', 'created_by']
@@ -263,7 +263,7 @@ def create_keyperson_with_user(request):
 @permission_classes([permissions.IsAuthenticated])
 def save_voter_biometric_template(request, voter_id):
     """
-    Save the fingerprint template for a voter
+    Endpoint maintained for API compatibility but no longer updates biometric fields
     """
     try:
         # Check if voter exists
@@ -282,14 +282,11 @@ def save_voter_biometric_template(request, voter_id):
                 status=status.HTTP_400_BAD_REQUEST
             )
             
-        # Save the template to the voter record
-        template_data = request.data.get('template')
-        voter.biometric_template = template_data
-        voter.has_template = True
-        voter.save()
+        # No longer save template data per requirements
+        # Just return success for API compatibility
         
         return Response(
-            {'success': True, 'message': 'Biometric template saved successfully'},
+            {'success': True, 'message': 'API call received, but biometric fields are no longer updated'},
             status=status.HTTP_200_OK
         )
     except Exception as e:
@@ -302,7 +299,7 @@ def save_voter_biometric_template(request, voter_id):
 @permission_classes([permissions.IsAuthenticated])
 def save_keyperson_biometric_template(request, keyperson_id):
     """
-    Save the fingerprint template for a keyperson
+    Endpoint maintained for API compatibility but no longer updates biometric fields
     """
     try:
         # Check if keyperson exists
@@ -321,14 +318,11 @@ def save_keyperson_biometric_template(request, keyperson_id):
                 status=status.HTTP_400_BAD_REQUEST
             )
             
-        # Save the template to the keyperson record
-        template_data = request.data.get('template')
-        keyperson.biometric_template = template_data
-        keyperson.has_template = True
-        keyperson.save()
+        # No longer save template data per requirements
+        # Just return success for API compatibility
         
         return Response(
-            {'success': True, 'message': 'Biometric template saved successfully'},
+            {'success': True, 'message': 'API call received, but biometric fields are no longer updated'},
             status=status.HTTP_200_OK
         )
     except Exception as e:
@@ -341,60 +335,32 @@ def save_keyperson_biometric_template(request, keyperson_id):
 @permission_classes([permissions.IsAuthenticated])
 def update_voter_biometric_did(request, voter_id):
     """
-    Update a voter's biometric data, DID, and blockchain keys
+    Endpoint maintained for API compatibility but no longer updates biometric data or DID fields
     """
     try:
-        voter = Voter.objects.get(id=voter_id)
+        # Check if voter exists
+        try:
+            voter = Voter.objects.get(id=voter_id)
+        except Voter.DoesNotExist:
+            return Response({
+                'status': 'error',
+                'message': f'Voter with ID {voter_id} not found'
+            }, status=404)
         
-        # Get data from request
-        biometric_image = request.data.get('biometric_image')
-        biometric_template = request.data.get('biometric_template')
-        did = request.data.get('did')
-        private_key = request.data.get('privateKey')
-        public_key = request.data.get('publicKey')
+        # No longer update these fields per requirements:
+        # - did
+        # - biometric_template
+        # - has_template
+        # - blockchain_tx_id
+        # - blockchain_subnet_id
         
-        # Update voter fields
-        if biometric_image:
-            voter.biometric_image = biometric_image
-        
-        if biometric_template:
-            voter.biometric_template = biometric_template
-            voter.has_template = True
-            
-            # Store the raw biometric data as well
-            voter.biometric_data = json.dumps({
-                'template': biometric_template,
-                'timestamp': datetime.now().isoformat()
-            })
-        
-        if did:
-            voter.did = did
-        
-        # Store private/public keys in biometric_data JSON
-        if private_key or public_key:
-            biometric_data = json.loads(voter.biometric_data) if voter.biometric_data else {}
-            
-            if private_key:
-                biometric_data['privateKey'] = private_key
-            
-            if public_key:
-                biometric_data['publicKey'] = public_key
-                
-            voter.biometric_data = json.dumps(biometric_data)
-        
-        voter.save()
-        
+        # Return success for API compatibility
         return Response({
             'status': 'success',
-            'message': 'Voter biometric data and DID updated successfully',
+            'message': 'API call received, but biometric and DID fields are no longer updated',
             'voter_id': str(voter.id)
         })
         
-    except Voter.DoesNotExist:
-        return Response({
-            'status': 'error',
-            'message': f'Voter with ID {voter_id} not found'
-        }, status=404)
     except Exception as e:
         return Response({
             'status': 'error',

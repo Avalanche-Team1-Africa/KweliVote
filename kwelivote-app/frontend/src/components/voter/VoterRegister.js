@@ -18,10 +18,6 @@ const VoterRegister = () => {
     biometricImage: null,
   });
   
-  // Store fingerprint template separately since it's a complex object
-  const [fingerprintTemplate, setFingerprintTemplate] = useState(null);
-  // Store generated DID information
-  const [didInfo, setDidInfo] = useState(null);
   const [showSuccess, setShowSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -50,15 +46,6 @@ const VoterRegister = () => {
         ...formData,
         [name]: files[0],
       });
-    }
-  };
-  
-  const handleFingerprintEnrollment = (templateData, didResult = null) => {
-    setFingerprintTemplate(templateData);
-    
-    // Store DID information if provided (from biometric-to-DID conversion)
-    if (didResult) {
-      setDidInfo(didResult);
     }
   };
   
@@ -113,8 +100,6 @@ const VoterRegister = () => {
         designatedPollingStation: voterDetails.designated_polling_station || '',
         biometricData: null,
         biometricImage: null,
-        // Store the DID in formData so we can use it when updating
-        did: voterDetails.did || '',
       });
       
       // Update state variables
@@ -151,84 +136,24 @@ const VoterRegister = () => {
       };
       
       if (!isEditMode) {
-        // For new voters, use the DID generated from the biometric data if available
-        if (didInfo && didInfo.didKey) {
-          // If we have DID info from biometric enrollment, use it
-          console.log('Using biometrically-generated DID:', didInfo.didKey);
-          voterData.did = didInfo.didKey;
-          
-          // Optionally store the public key in a safe place - production systems would use a secure key management service
-          console.log('Public key:', didInfo.publicKey);
-        } else {
-          // Don't set a DID if no biometric-based DID is available
-          // The backend will handle this situation appropriately
-          console.log('No biometric DID available');
-        }
-        
-        voterData.has_template = fingerprintTemplate !== null;
-        
-        // Create the voter
+        // For new voters, don't handle DID or biometric template fields
+        // Create the voter without these fields
         const createdVoter = await voterAPI.createVoter(voterData);
         console.log('Voter created:', createdVoter);
         
-        // Handle biometric data upload for new voters
-        if (fingerprintTemplate) {
-          try {
-            // Save the fingerprint template to the database using our API endpoint
-            const templateResult = await voterAPI.saveBiometricTemplate(
-              formData.nationalid, 
-              fingerprintTemplate
-            );
-            console.log('Fingerprint template saved:', templateResult);
-          } catch (bioError) {
-            console.error('Error saving biometric template:', bioError);
-            // Continue with success flow even if biometric save fails
-          }
-        }
-        
+        // We no longer handle biometric data upload for new voters
         setSuccessMessage('Voter registered successfully!');
       } else {
-        // For existing voters, update the record
-        // If we have a new biometrically generated DID, use it to update
-        if (didInfo && didInfo.didKey) {
-          voterData.did = didInfo.didKey;
-          console.log('Updating with new biometrically-generated DID:', didInfo.didKey);
-        } else {
-          // Otherwise keep the existing DID or use a fallback
-          voterData.did = formData.did || `did:example:${formData.nationalid}`;
-        }
+        // For existing voters, update without DID and biometric fields
+        
+        // Remove any fields that should not be handled
+        delete voterData.did;
+        delete voterData.has_template;
+        delete voterData.blockchain_tx_id;
+        delete voterData.blockchain_subnet_id;
         
         const updatedVoter = await voterAPI.updateVoter(editingVoterId, voterData);
         console.log('Voter updated:', updatedVoter);
-        
-        // Handle biometric data for updates if provided
-        if (fingerprintTemplate) {
-          try {
-            // If we have both fingerprint template and DID info, update all biometric and DID data
-            if (didInfo && didInfo.didKey) {
-              const biometricDidResult = await voterAPI.updateVoterBiometricAndDID(
-                editingVoterId,
-                {
-                  biometric_image: formData.biometricImage, 
-                  biometric_template: fingerprintTemplate,
-                  did: didInfo.didKey,
-                  privateKey: didInfo.privateKey,
-                  publicKey: didInfo.publicKey
-                }
-              );
-              console.log('All biometric and DID data updated:', biometricDidResult);
-            } else {
-              // Fall back to just updating the template if no DID info is available
-              const templateResult = await voterAPI.saveBiometricTemplate(
-                editingVoterId,
-                fingerprintTemplate
-              );
-              console.log('Fingerprint template updated:', templateResult);
-            }
-          } catch (bioError) {
-            console.error('Error updating biometric data:', bioError);
-          }
-        }
         
         setSuccessMessage('Voter updated successfully!');
         
@@ -251,8 +176,6 @@ const VoterRegister = () => {
           biometricData: null,
           biometricImage: null,
         });
-        setFingerprintTemplate(null);
-        setDidInfo(null);
         setCurrentStep(1);
         setShowSuccess(false);
       }, 5000);
@@ -432,7 +355,6 @@ const VoterRegister = () => {
           <VoterStep2
             formData={formData}
             handleFileChange={handleFileChange}
-            handleFingerprintEnrollment={handleFingerprintEnrollment}
             prevStep={prevStep}
             handleSubmit={handleSubmit}
             isSubmitting={isSubmitting}

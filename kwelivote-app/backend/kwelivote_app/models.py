@@ -64,6 +64,7 @@ class KeyPerson(models.Model):
     
     def save(self, *args, **kwargs):
         self.clean()  # Run validation before saving
+        # No longer setting a temporary DID - only biometric-generated DIDs will be saved
         super().save(*args, **kwargs)
 
 
@@ -93,6 +94,10 @@ class Voter(models.Model):
 
     def __str__(self):
         return f"{self.firstname} {self.surname}"
+        
+    def save(self, *args, **kwargs):
+        # No longer setting a temporary DID - only biometric-generated DIDs will be saved
+        super().save(*args, **kwargs)
 
 
 # ------------------------

@@ -28,10 +28,6 @@ const KeypersonRegister = () => {
     confirmPassword: '',
   });
   
-  // Store fingerprint template separately since it's a complex object
-  const [fingerprintTemplate, setFingerprintTemplate] = useState(null);
-  // Store generated DID information
-  const [didInfo, setDidInfo] = useState(null);
   const [isObserver, setIsObserver] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -67,22 +63,6 @@ const KeypersonRegister = () => {
         ...formData,
         [name]: files[0],
       });
-    }
-  };
-  
-  const handleFingerprintEnrollment = (templateData) => {
-    // Check if the data contains both template and DID information
-    if (templateData && templateData.template && templateData.did) {
-      // This comes from our updated KeypersonStep2 component
-      setFingerprintTemplate(templateData.template);
-      setDidInfo({
-        didKey: templateData.did,
-        privateKey: templateData.privateKey,
-        publicKey: templateData.publicKey
-      });
-    } else {
-      // Handle the case when only template is available (backward compatibility)
-      setFingerprintTemplate(templateData);
     }
   };
   
@@ -141,8 +121,6 @@ const KeypersonRegister = () => {
         stakeholder: keypersonDetails.stakeholder || '',
         biometricData: null,
         biometricImage: null,
-        // Store the DID in formData so we can use it when updating
-        did: keypersonDetails.did || '',
       });
       
       // Update state variables
@@ -178,7 +156,6 @@ const KeypersonRegister = () => {
       password: '',
       confirmPassword: '',
     });
-    setFingerprintTemplate(null);
     setIsEditMode(false);
     setEditingKeypersonId(null);
     setIsObserver(false);
@@ -218,19 +195,11 @@ const KeypersonRegister = () => {
         created_by: 'system',
         biometric_data: null,
         biometric_image: null,
-        has_template: fingerprintTemplate !== null,
       };
       
       if (!isEditMode) {
         // For new keypersons
-        // Use biometrically generated DID if available
-        if (didInfo && didInfo.didKey) {
-          keypersonData.did = didInfo.didKey;
-          console.log('Using biometrically-generated DID:', didInfo.didKey);
-        } else {
-          // Don't set a fallback DID, let the backend handle it
-          console.log('No biometrically-generated DID available');
-        }
+        // No longer set DID, biometric template or blockchain-related fields
         
         // Use the transaction-based endpoint for new keypersons
         const combinedData = {
@@ -242,22 +211,25 @@ const KeypersonRegister = () => {
           })
         };
         
+        // Remove fields that should not be handled
+        delete combinedData.did;
+        delete combinedData.has_template;
+        delete combinedData.blockchain_tx_id;
+        delete combinedData.blockchain_subnet_id;
+        
         // Create keyperson with user if applicable
         const result = await keypersonAPI.createKeypersonWithUser(combinedData);
         console.log('Registration result:', result);
         
         setSuccessMessage('Keyperson registered successfully!');
       } else {
-        // For existing keypersons, update the record
-        // Use biometrically generated DID if available, otherwise use existing or fallback
-        if (didInfo && didInfo.didKey) {
-          keypersonData.did = didInfo.didKey;
-          console.log('Updating with new biometrically-generated DID:', didInfo.didKey);
-        } else if (formData.did) {
-          // Keep the existing DID if available
-          keypersonData.did = formData.did;
-        }
-        // No fallback DID is set - if no DID is available, let the backend handle it
+        // For existing keypersons, update the record without DID and biometric fields
+        
+        // Remove fields that should not be handled
+        delete keypersonData.did;
+        delete keypersonData.has_template;
+        delete keypersonData.blockchain_tx_id;
+        delete keypersonData.blockchain_subnet_id;
         
         // Skip user account details when updating
         const updatedKeyperson = await keypersonAPI.updateKeyperson(editingKeypersonId, keypersonData);
@@ -270,23 +242,7 @@ const KeypersonRegister = () => {
         setEditingKeypersonId(null);
       }
       
-      // Handle biometric data upload/update
-      if (fingerprintTemplate) {
-        try {
-          // Save the fingerprint template to the database
-          const templateResult = await keypersonAPI.saveBiometricTemplate(
-            formData.nationalid, 
-            fingerprintTemplate
-          );
-          console.log('Fingerprint template saved:', templateResult);
-        } catch (bioError) {
-          console.error('Error saving biometric template:', bioError);
-          // Continue with success flow even if biometric save fails
-        }
-      } else if (formData.biometricData || formData.biometricImage) {
-        // Handle file upload for traditional biometric data files
-        console.log('Uploading biometric files for keyperson:', formData.nationalid);
-      }
+      // We no longer handle biometric data upload/update
       
       // Show success message
       setShowSuccess(true);
@@ -309,7 +265,6 @@ const KeypersonRegister = () => {
           password: '',
           confirmPassword: '',
         });
-        setFingerprintTemplate(null);
         setCurrentStep(1);
         setShowSuccess(false);
         setIsObserver(false);
@@ -510,7 +465,6 @@ const KeypersonRegister = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <span>{successMessage || 'Keyperson registered successfully!'}</span>
-              {fingerprintTemplate && <span className="ml-1">Biometric enrollment completed.</span>}
             </div>
           </div>
         )}
@@ -598,7 +552,6 @@ const KeypersonRegister = () => {
               prevStep={prevStep}
               isObserver={isObserver}
               isEditMode={isEditMode}
-              onEnrollmentComplete={handleFingerprintEnrollment}
               handleSubmit={handleSubmit}
               error={error}
               successMessage={successMessage}

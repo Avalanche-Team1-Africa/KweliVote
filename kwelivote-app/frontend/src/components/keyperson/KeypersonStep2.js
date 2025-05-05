@@ -1,93 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import FingerprintEnrollment from '../voter/FingerprintEnrollment'; // Reuse the voter component
-import biometricToDID from '../../utils/biometricToDID';
 
 const KeypersonStep2 = ({ formData, nextStep, prevStep, isObserver, onEnrollmentComplete, isEditMode, handleSubmit, error, successMessage, isSubmitting, showSuccess }) => {
-  const [fingerprintTemplate, setFingerprintTemplate] = useState(null);
   const [showLocalSuccess, setShowLocalSuccess] = useState(false);
   const [localSuccessMessage] = useState('');
   const [localError, setLocalError] = useState('');
   const [localFingerprintError, setLocalFingerprintError] = useState('');
-  const [didResult, setDidResult] = useState(null);
-  const [conversionLog, setConversionLog] = useState([]);
-  const [showConversionDetails, setShowConversionDetails] = useState(false);
-  const [currentStep, setCurrentStep] = useState(null);
-
-  const workflowSteps = [
-    { id: 'fingerprint', label: 'Fingerprint' },
-    { id: 'template', label: 'Template' },
-    { id: 'stabilization', label: 'Stabilization' },
-    { id: 'secretKey', label: 'Secret Key' },
-    { id: 'hash', label: 'Hash' },
-    { id: 'keyPair', label: 'Key Pair' },
-    { id: 'did', label: 'DID:key' }
-  ];
-
-  // Generate a color for each step in the workflow
-  const getStepColorClass = (stepId) => {
-    if (!currentStep) return 'bg-gray-200 text-gray-500';
-    if (stepId === currentStep) return 'bg-blue-500 text-white';
-    if (currentStep === 'did' || 
-        (workflowSteps.findIndex(s => s.id === stepId) < workflowSteps.findIndex(s => s.id === currentStep))) {
-      return 'bg-green-500 text-white';
-    }
-    return 'bg-gray-200 text-gray-500';
-  };
-
-  // Process fingerprint to DID when template is available
-  useEffect(() => {
-    if (fingerprintTemplate && formData.nationalid) {
-      try {
-        setConversionLog([]);
-        setCurrentStep('fingerprint');
-        setLocalFingerprintError(''); // Clear any previous errors
-
-        // Log the final fingerprint template
-        console.log('Final fingerprint template generated for keyperson:', JSON.stringify(fingerprintTemplate, null, 2));
-
-        const originalConsoleLog = console.log;
-        console.log = (message) => {
-          originalConsoleLog(message);
-          if (typeof message === 'string') {
-            if (message.includes("STEP 1")) setCurrentStep('template');
-            else if (message.includes("STEP 2")) setCurrentStep('stabilization');
-            else if (message.includes("STEP 3")) setCurrentStep('secretKey');
-            else if (message.includes("STEP 4")) setCurrentStep('hash');
-            else if (message.includes("STEP 5")) setCurrentStep('keyPair');
-            else if (message.includes("STEP 7")) setCurrentStep('did');
-
-            setConversionLog(prevLogs => [...prevLogs, message]);
-          }
-        };
-
-        // Generate DID from the fingerprint template
-        const result = biometricToDID(fingerprintTemplate, formData.nationalid);
-        setDidResult(result);
-
-        // Reset console.log to original function
-        console.log = originalConsoleLog;
-      } catch (error) {
-        console.error('Error during biometric to DID conversion:', error);
-        setConversionLog(prevLogs => [...prevLogs, `Error: ${error.message}`]);
-        setLocalFingerprintError(`Error during biometric to DID conversion: ${error.message}`);
-      }
-    }
-  }, [fingerprintTemplate, formData.nationalid]);
 
   const handleNext = async (e) => {
     e.preventDefault();
-    // Add fingerprint template and DID to form data if available
-    if (fingerprintTemplate && onEnrollmentComplete) {
-      // Pass both the template and DID information (if available)
-      const templateWithDID = didResult ? { 
-        template: fingerprintTemplate,
-        did: didResult.didKey,
-        privateKey: didResult.privateKey,
-        publicKey: didResult.publicKey
-      } : fingerprintTemplate;
-      
-      onEnrollmentComplete(templateWithDID);
-    }
     
     // If we're in edit mode or this is an observer, we should submit the form directly
     if (isEditMode || isObserver) {
@@ -111,10 +32,12 @@ const KeypersonStep2 = ({ formData, nextStep, prevStep, isObserver, onEnrollment
   };
 
   const handleEnrollmentComplete = (templateData) => {
-    setFingerprintTemplate(templateData);
-    // Pass the data up to the parent component
+    // We no longer process fingerprint templates or DIDs
+    console.log('Biometric enrollment completed - data discarded as requested');
+    
     if (onEnrollmentComplete) {
-      onEnrollmentComplete(templateData);
+      // Pass null or an empty object since we're no longer handling these fields
+      onEnrollmentComplete({});
     }
   };
 
@@ -129,7 +52,6 @@ const KeypersonStep2 = ({ formData, nextStep, prevStep, isObserver, onEnrollment
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <span>{successMessage || localSuccessMessage || 'Operation successful!'}</span>
-              {fingerprintTemplate && <span className="ml-1">Biometric enrollment completed.</span>}
             </div>
           </div>
         )}
@@ -167,148 +89,6 @@ const KeypersonStep2 = ({ formData, nextStep, prevStep, isObserver, onEnrollment
           onEnrollmentComplete={handleEnrollmentComplete}
           requiredScans={5}
         />
-        
-        {/* DID workflow visualization if fingerprint template exists */}
-        {fingerprintTemplate && (
-          <div className="mt-6 bg-gradient-to-r from-indigo-50 to-blue-50 p-4 rounded-lg border border-blue-100">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="font-semibold text-indigo-800">Fingerprint to Blockchain Identity Conversion</h4>
-              <button 
-                type="button" 
-                onClick={() => setShowConversionDetails(!showConversionDetails)}
-                className="text-xs bg-blue-100 hover:bg-blue-200 text-blue-800 px-2 py-1 rounded"
-              >
-                {showConversionDetails ? 'Hide Details' : 'Show Details'}
-              </button>
-            </div>
-            
-            <div className="mb-6">
-              <div className="hidden sm:block">
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center" aria-hidden="true">
-                    <div className={`h-0.5 w-full ${currentStep ? 'bg-gray-200' : 'bg-gray-100'}`}></div>
-                  </div>
-                  
-                  <div className="relative flex justify-between">
-                    {workflowSteps.map((step, idx) => (
-                      <div key={step.id} className="flex flex-col items-center">
-                        <div className={`h-8 w-8 flex items-center justify-center rounded-full ${getStepColorClass(step.id)} transition-colors duration-200 shadow-md`}>
-                          {(currentStep === 'did' || 
-                            (workflowSteps.findIndex(s => s.id === step.id) < workflowSteps.findIndex(s => s.id === currentStep))) 
-                            ? (
-                              <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                              </svg>
-                            ) : (
-                              <span className="text-xs">{idx + 1}</span>
-                            )}
-                        </div>
-                        <div className={`mt-2 text-xs font-medium ${
-                          step.id === currentStep ? 'text-blue-600' : 
-                          currentStep === 'did' || (workflowSteps.findIndex(s => s.id === step.id) < workflowSteps.findIndex(s => s.id === currentStep)) 
-                            ? 'text-green-600' 
-                            : 'text-gray-500'
-                        }`}>
-                          {step.label}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              
-              <div className="sm:hidden">
-                <div className="space-y-2">
-                  {workflowSteps.map((step, idx) => (
-                    <div 
-                      key={step.id}
-                      className={`flex items-center p-2 rounded-md ${
-                        step.id === currentStep ? 'bg-blue-100 border-l-4 border-blue-500' : 
-                        currentStep === 'did' || (workflowSteps.findIndex(s => s.id === step.id) < workflowSteps.findIndex(s => s.id === currentStep))
-                          ? 'bg-green-50 border-l-4 border-green-500' 
-                          : 'bg-gray-50 border-l-4 border-gray-300'
-                      }`}
-                    >
-                      <div className={`h-6 w-6 flex items-center justify-center rounded-full mr-2 ${getStepColorClass(step.id)} text-xs`}>
-                        {(currentStep === 'did' || 
-                          (workflowSteps.findIndex(s => s.id === step.id) < workflowSteps.findIndex(s => s.id === currentStep))) 
-                          ? (
-                            <svg className="h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                          ) : (
-                            <span>{idx + 1}</span>
-                          )}
-                      </div>
-                      <span 
-                        className={`text-sm font-medium ${
-                          step.id === currentStep ? 'text-blue-700' : 
-                          currentStep === 'did' || (workflowSteps.findIndex(s => s.id === step.id) < workflowSteps.findIndex(s => s.id === currentStep))
-                            ? 'text-green-700' 
-                            : 'text-gray-600'
-                        }`}
-                      >
-                        {step.label}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-            
-            {showConversionDetails && (
-              <div className="bg-white rounded border border-gray-200 p-3 mb-4 text-xs font-mono h-40 overflow-y-auto">
-                {conversionLog.map((log, index) => (
-                  <div key={index} className="pb-1">{log}</div>
-                ))}
-              </div>
-            )}
-            
-            {didResult && (
-              <div className="bg-white rounded-lg p-4 border border-blue-200 mt-3">
-                <div className="grid grid-cols-1 gap-3">
-                  <div>
-                    <div className="flex items-center mb-1">
-                      <svg className="h-5 w-5 text-green-500 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                      </svg>
-                      <span className="font-medium text-gray-800">Blockchain Identity Generated Successfully!</span>
-                    </div>
-                    <span className="text-xs font-medium text-gray-500">DECENTRALIZED IDENTIFIER (DID)</span>
-                    <div className="font-mono text-sm bg-gray-50 p-2 rounded border border-gray-200 truncate">
-                      {didResult.didKey}
-                    </div>
-                    <p className="mt-2 text-xs text-gray-600">
-                      This DID will be stored with the keyperson record. You can now submit to complete registration.
-                    </p>
-                  </div>
-                  
-                  {showConversionDetails && (
-                    <>
-                      <div>
-                        <span className="text-xs font-medium text-gray-500">PUBLIC KEY (HEX)</span>
-                        <div className="font-mono text-xs bg-gray-50 p-2 rounded border border-gray-200 truncate">
-                          {didResult.publicKey}
-                        </div>
-                      </div>
-                      <div>
-                        <span className="text-xs font-medium text-red-500 flex items-center">
-                          <svg className="h-3 w-3 mr-1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-                          </svg>
-                          PRIVATE KEY (SECURE)
-                        </span>
-                        <div className="font-mono text-xs bg-gray-50 p-2 rounded border border-gray-200 truncate">
-                          {didResult.privateKey}
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
         
         {isEditMode && (
           <div className="mt-6 p-4 bg-blue-50 rounded-md border border-blue-100">
