@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import FingerprintEnrollment from '../voter/FingerprintEnrollment'; // Reuse the voter component
 import biometricToDID from '../../utils/biometricToDID';
+import apiServices from '../../utils/api';
 
 const KeypersonStep2 = ({ formData, nextStep, prevStep, isObserver, onEnrollmentComplete, isEditMode, handleSubmit, error, successMessage, isSubmitting, showSuccess }) => {
   const [showLocalSuccess, setShowLocalSuccess] = useState(false);
@@ -26,22 +27,64 @@ const KeypersonStep2 = ({ formData, nextStep, prevStep, isObserver, onEnrollment
   const handleNext = async (e) => {
     e.preventDefault();
     
-    // If we're in edit mode or this is an observer, we should submit the form directly
+    // First submit the form to save/update the keyperson basic details
     if (isEditMode || isObserver) {
       if (handleSubmit) {
         // Clear local states
         setLocalError('');
         setShowLocalSuccess(false);
-        // Submit the form directly using the parent's handleSubmit function
-        await handleSubmit(e);
-        // We don't need to set local success message here as it will be handled by the parent component
+        
+        try {
+          // Submit the form using the parent's handleSubmit function
+          await handleSubmit(e);
+          
+          // After the keyperson is saved/updated, handle biometric data if available
+          if (didResult && fingerprintTemplate?.iso_template_base64 && formData.id) {
+            await saveBiometricData();
+          }
+        } catch (error) {
+          console.error('Error during keyperson save/update:', error);
+          setLocalError(error.message || 'An error occurred during save/update');
+        }
       }
     } else {
-      // Otherwise proceed to the next step as usual
+      // For new keypersons not in edit mode, just proceed to the next step
+      // Biometric data will be saved after the full registration process is complete
       nextStep();
     }
   };
-  
+
+  // Extract the biometric data saving logic to a separate function
+  const saveBiometricData = async () => {
+    if (!didResult || !fingerprintTemplate?.iso_template_base64) {
+      setLocalFingerprintError('Missing biometric data or DID');
+      return false;
+    }
+    
+    const keypersonId = formData.id || formData.nationalid;
+    
+    if (!keypersonId) {
+      setLocalFingerprintError('Cannot save biometric data: No keyperson ID available');
+      return false;
+    }
+    
+    try {
+      const biometricData = {
+        did: didResult.didKey,
+        biometric_template: fingerprintTemplate.iso_template_base64
+      };
+      
+      // Call the API to save biometric data
+      const response = await apiServices.keyperson.saveBiometricData(keypersonId, biometricData);
+      console.log('Keyperson biometric data saved successfully:', response);
+      return true;
+    } catch (error) {
+      console.error('Error saving keyperson biometric data:', error);
+      setLocalFingerprintError(`Failed to save biometric data: ${error.message || 'Unknown error'}`);
+      return false;
+    }
+  };
+
   const handlePrev = (e) => {
     e.preventDefault();
     prevStep();

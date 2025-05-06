@@ -116,57 +116,74 @@ const VoterRegister = () => {
     }
   };
   
-  const handleSubmit = async (e) => {
+  const handleFormSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
     setError('');
+    setShowSuccess(false);
     
     try {
-      // Get the logged-in user info
-      const userInfo = JSON.parse(sessionStorage.getItem('userInfo') || '{}');
+      // First validate all required fields
+      const requiredFields = ['firstname', 'surname', 'nationalid', 'designatedPollingStation'];
+      const missingFields = requiredFields.filter(field => !formData[field]);
       
-      // Prepare voter data for API with correct field names matching the backend
-      const voterData = {
-        nationalid: formData.nationalid,
-        firstname: formData.firstname,
-        middlename: formData.middlename,
-        surname: formData.surname,
-        designated_polling_station: formData.designatedPollingStation,
-        created_by: userInfo.username || 'system', // Use the logged-in username or default to 'system'
-      };
-      
-      if (!isEditMode) {
-        // For new voters, don't handle DID or biometric template fields
-        // Create the voter without these fields
-        const createdVoter = await voterAPI.createVoter(voterData);
-        console.log('Voter created:', createdVoter);
-        
-        // We no longer handle biometric data upload for new voters
-        setSuccessMessage('Voter registered successfully!');
-      } else {
-        // For existing voters, update without DID and biometric fields
-        
-        // Remove any fields that should not be handled
-        delete voterData.did;
-        delete voterData.has_template;
-        delete voterData.blockchain_tx_id;
-        delete voterData.blockchain_subnet_id;
-        
-        const updatedVoter = await voterAPI.updateVoter(editingVoterId, voterData);
-        console.log('Voter updated:', updatedVoter);
-        
-        setSuccessMessage('Voter updated successfully!');
-        
-        // Reset edit mode after successful update
-        setIsEditMode(false);
-        setEditingVoterId(null);
+      if (missingFields.length > 0) {
+        // Convert camelCase field names to human-readable format for the error message
+        const formattedMissingFields = missingFields.map(field => {
+          if (field === 'designatedPollingStation') return 'designated polling station';
+          return field;
+        });
+        setError(`Please fill in all required fields: ${formattedMissingFields.join(', ')}`);
+        setIsSubmitting(false);
+        return;
       }
       
-      // Show success message
-      setShowSuccess(true);
+      let apiResponse;
       
-      // Reset form after successful submission
-      setTimeout(() => {
+      // Create or update the voter record
+      if (isEditMode) {
+        // For updates, use PUT with the voter's ID
+        apiResponse = await voterAPI.updateVoter(editingVoterId, {
+          ...formData,
+          // Transform fields to match API expectations
+          designated_polling_station: formData.designatedPollingStation,
+          created_by: sessionStorage.getItem('userInfo') 
+            ? JSON.parse(sessionStorage.getItem('userInfo')).user?.username || 'anonymous' 
+            : 'anonymous',
+          // Include biometric data if available from biometric step
+          ...(formData.biometricData?.did && formData.biometricData?.biometric_template ? {
+            did: formData.biometricData.did,
+            biometric_template: formData.biometricData.biometric_template
+          } : {})
+        });
+        
+        setSuccessMessage('Voter record updated successfully!');
+        setShowSuccess(true);
+      } else {
+        // For new voters, use POST with no ID
+        apiResponse = await voterAPI.createVoter({
+          ...formData,
+          // Transform fields to match API expectations
+          designated_polling_station: formData.designatedPollingStation,
+          created_by: sessionStorage.getItem('userInfo') 
+            ? JSON.parse(sessionStorage.getItem('userInfo')).user?.username || 'anonymous' 
+            : 'anonymous',
+          // Include biometric data if available from biometric step
+          ...(formData.biometricData?.did && formData.biometricData?.biometric_template ? {
+            did: formData.biometricData.did,
+            biometric_template: formData.biometricData.biometric_template
+          } : {})
+        });
+        
+        // Update formData with the returned ID for potential biometric updates
+        setFormData(prev => ({ ...prev, id: apiResponse.id }));
+        
+        setSuccessMessage('Voter registered successfully!');
+        setShowSuccess(true);
+      }
+      
+      // Reset the form if not in edit mode
+      if (!isEditMode) {
         setFormData({
           nationalid: '',
           firstname: '',
@@ -177,11 +194,10 @@ const VoterRegister = () => {
           biometricImage: null,
         });
         setCurrentStep(1);
-        setShowSuccess(false);
-      }, 5000);
-    } catch (error) {
-      console.error(isEditMode ? 'Error updating voter:' : 'Error registering voter:', error);
-      setError(error.message || `Failed to ${isEditMode ? 'update' : 'register'} voter. Please try again.`);
+      }
+    } catch (err) {
+      console.error('Error saving voter:', err);
+      setError(err.message || 'An error occurred while saving the voter record');
     } finally {
       setIsSubmitting(false);
     }
@@ -356,7 +372,7 @@ const VoterRegister = () => {
             formData={formData}
             handleFileChange={handleFileChange}
             prevStep={prevStep}
-            handleSubmit={handleSubmit}
+            handleSubmit={handleFormSubmit}
             isSubmitting={isSubmitting}
           />
         )}

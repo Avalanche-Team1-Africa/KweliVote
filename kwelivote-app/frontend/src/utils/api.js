@@ -174,33 +174,49 @@ export const voterAPI = {
   },
   
   async createVoter(data) {
-    return authenticatedRequest(`${API_BASE_URL}/voters/`, 'POST', data);
+    // Extract any biometric data from the request
+    const biometricData = {};
+    if (data.did) biometricData.did = data.did;
+    if (data.biometric_template) biometricData.biometric_template = data.biometric_template;
+    
+    // Remove biometric fields from main data
+    const voterData = { ...data };
+    delete voterData.did;
+    delete voterData.biometric_template;
+    delete voterData.has_template;
+    delete voterData.blockchain_tx_id;
+    delete voterData.blockchain_subnet_id;
+    
+    // If both DID and biometric_template are present, the backend will handle saving them
+    return authenticatedRequest(`${API_BASE_URL}/voters/`, 'POST', {
+      ...voterData,
+      ...(biometricData.did && biometricData.biometric_template ? biometricData : {})
+    });
   },
   
   async updateVoter(id, data) {
-    return authenticatedRequest(`${API_BASE_URL}/voters/${id}/`, 'PUT', data);
+    // Extract any biometric data from the request
+    const biometricData = {};
+    if (data.did) biometricData.did = data.did;
+    if (data.biometric_template) biometricData.biometric_template = data.biometric_template;
+    
+    // Remove biometric fields from main data
+    const voterData = { ...data };
+    delete voterData.did;
+    delete voterData.biometric_template;
+    delete voterData.has_template;
+    delete voterData.blockchain_tx_id;
+    delete voterData.blockchain_subnet_id;
+    
+    // Update voter with non-biometric data and biometric data if available
+    return authenticatedRequest(`${API_BASE_URL}/voters/${id}/`, 'PUT', {
+      ...voterData,
+      ...(biometricData.did && biometricData.biometric_template ? biometricData : {})
+    });
   },
   
   async deleteVoter(id) {
     return authenticatedRequest(`${API_BASE_URL}/voters/${id}/`, 'DELETE');
-  },
-  
-  // New method to save biometric template
-  async saveBiometricTemplate(voterId, template) {
-    return authenticatedRequest(
-      `${API_BASE_URL}/voters/${voterId}/biometric-template/`, 
-      'POST', 
-      { template }
-    );
-  },
-  
-  // New method to update all biometric and blockchain identity data
-  async updateVoterBiometricAndDID(voterId, data) {
-    return authenticatedRequest(
-      `${API_BASE_URL}/voters/${voterId}/biometric-did/`,
-      'POST',
-      data
-    );
   },
   
   // Enhanced search method with server-side and client-side fallback
@@ -243,7 +259,23 @@ export const voterAPI = {
         (voter.designated_polling_station && voter.designated_polling_station.toLowerCase().includes(searchTerm))
       );
     }
-  }
+  },
+
+  // Method to save biometric data (DID, template, has_template)
+  // Only use this when you need to explicitly save biometric data separately
+  async saveBiometricData(voterId, data) {
+    // Validate data before sending
+    if (!data.did || !data.biometric_template) {
+      throw new Error('Both DID and biometric template are required');
+    }
+    
+    // voterId is the nationalid of the voter
+    return authenticatedRequest(
+      `${API_BASE_URL}/voters/${voterId}/biometric-data/`, 
+      'POST', 
+      data
+    );
+  },
 };
 
 // Keyperson API functions
@@ -257,11 +289,75 @@ export const keypersonAPI = {
   },
   
   async createKeyperson(data) {
-    return authenticatedRequest(`${API_BASE_URL}/keypersons/`, 'POST', data);
+    // Extract any biometric data from the request
+    const biometricData = {};
+    if (data.did) biometricData.did = data.did;
+    if (data.biometric_template) biometricData.biometric_template = data.biometric_template;
+    
+    // Remove biometric fields from main data
+    const keypersonData = { ...data };
+    delete keypersonData.did;
+    delete keypersonData.biometric_template;
+    delete keypersonData.has_template;
+    delete keypersonData.blockchain_tx_id;
+    delete keypersonData.blockchain_subnet_id;
+
+    // Convert camelCase field names to snake_case for backend
+    const transformedData = {
+      ...keypersonData,
+      designated_polling_station: keypersonData.designatedPollingStation,
+      political_party: keypersonData.politicalParty,
+      observer_type: keypersonData.observerType,
+      // Get current user info for created_by field
+      created_by: JSON.parse(sessionStorage.getItem('userInfo') || '{}').username || 'system',
+    };
+    
+    // Remove the camelCase fields to avoid duplications
+    delete transformedData.designatedPollingStation;
+    delete transformedData.politicalParty;
+    delete transformedData.observerType;
+    
+    // If both DID and biometric_template are present, include them in the request
+    return authenticatedRequest(`${API_BASE_URL}/keypersons/`, 'POST', {
+      ...transformedData,
+      ...(biometricData.did && biometricData.biometric_template ? biometricData : {})
+    });
   },
   
   async updateKeyperson(id, data) {
-    return authenticatedRequest(`${API_BASE_URL}/keypersons/${id}/`, 'PUT', data);
+    // Extract any biometric data from the request
+    const biometricData = {};
+    if (data.did) biometricData.did = data.did;
+    if (data.biometric_template) biometricData.biometric_template = data.biometric_template;
+    
+    // Remove biometric fields from main data
+    const keypersonData = { ...data };
+    delete keypersonData.did;
+    delete keypersonData.biometric_template;
+    delete keypersonData.has_template;
+    delete keypersonData.blockchain_tx_id;
+    delete keypersonData.blockchain_subnet_id;
+    
+    // Convert camelCase field names to snake_case for backend
+    const transformedData = {
+      ...keypersonData,
+      designated_polling_station: keypersonData.designatedPollingStation,
+      political_party: keypersonData.politicalParty,
+      observer_type: keypersonData.observerType,
+      // Get current user info for created_by field
+      created_by: JSON.parse(sessionStorage.getItem('userInfo') || '{}').username || 'system',
+    };
+    
+    // Remove the camelCase fields to avoid duplications
+    delete transformedData.designatedPollingStation;
+    delete transformedData.politicalParty;
+    delete transformedData.observerType;
+    
+    // Update keyperson with non-biometric data and biometric data if available
+    return authenticatedRequest(`${API_BASE_URL}/keypersons/${id}/`, 'PUT', {
+      ...transformedData,
+      ...(biometricData.did && biometricData.biometric_template ? biometricData : {})
+    });
   },
   
   async deleteKeyperson(id) {
@@ -273,25 +369,24 @@ export const keypersonAPI = {
     return authenticatedRequest(`${API_BASE_URL}/users/`, 'POST', data);
   },
 
-  // New method to save biometric template for keypersons
-  async saveBiometricTemplate(keypersonId, template) {
-    return authenticatedRequest(
-      `${API_BASE_URL}/keypersons/${keypersonId}/biometric-template/`, 
-      'POST', 
-      { template }
-    );
-  },
-
-  // New transaction-based endpoint for creating both keyperson and user in a single operation
+  // Transaction-based endpoint for creating both keyperson and user in a single operation
   async createKeypersonWithUser(data) {
-    // This endpoint doesn't require authentication for keyperson registration
+    // Extract any biometric data from the request
+    const biometricData = {};
+    if (data.did) biometricData.did = data.did;
+    if (data.biometric_template) biometricData.biometric_template = data.biometric_template;
+    
+    // Send the data to the endpoint - it will handle biometric data if present
     try {
       const response = await fetch(`${API_BASE_URL}/keyperson-with-user/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          ...data,
+          ...biometricData  // Include biometric data if available
+        }),
       });
       
       if (!response.ok) {
@@ -345,7 +440,23 @@ export const keypersonAPI = {
         (keyperson.role && keyperson.role.toLowerCase().includes(searchTerm))
       );
     }
-  }
+  },
+
+  // Method to save biometric data (DID, template, has_template)
+  // Only use this when you need to explicitly save biometric data separately
+  async saveBiometricData(keypersonId, data) {
+    // Validate data before sending
+    if (!data.did || !data.biometric_template) {
+      throw new Error('Both DID and biometric template are required');
+    }
+    
+    // keypersonId is the nationalid of the keyperson
+    return authenticatedRequest(
+      `${API_BASE_URL}/keypersons/${keypersonId}/biometric-data/`, 
+      'POST', 
+      data
+    );
+  },
 };
 
 // Candidate API functions
@@ -398,7 +509,7 @@ const apiServices = {
   keyperson: keypersonAPI,
   candidate: candidateAPI,
   results: resultsAPI,
-  fingerprint: fingerprintAPI,  // Add the new fingerprint API service
+  fingerprint: fingerprintAPI,
 };
 
 export default apiServices;

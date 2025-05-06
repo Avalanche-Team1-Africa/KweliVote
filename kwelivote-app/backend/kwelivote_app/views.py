@@ -174,9 +174,6 @@ def create_keyperson_with_user(request):
                 'created_by': data.get('created_by', 'system'),
             }
             
-            # Remove fields that should not be handled (even if they're in the request data)
-            # Note: We simply don't include them in keyperson_data rather than having to remove them
-            
             # Validate required keyperson fields
             required_fields = ['nationalid', 'firstname', 'surname', 'role', 'designated_polling_station', 'created_by']
             missing_fields = [field for field in required_fields if not keyperson_data.get(field)]
@@ -241,6 +238,14 @@ def create_keyperson_with_user(request):
                 keyperson.user = user
                 keyperson.save()
             
+            # Check if biometric data is available and save it
+            if data.get('did') and data.get('biometric_template'):
+                # Save biometric data
+                keyperson.did = data.get('did')
+                keyperson.biometric_template = data.get('biometric_template')
+                keyperson.has_template = True
+                keyperson.save()
+            
             return Response(
                 {
                     'success': True,
@@ -261,34 +266,65 @@ def create_keyperson_with_user(request):
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
-def save_voter_biometric_template(request, voter_id):
+def save_voter_biometric_data(request, voter_id):
     """
-    Endpoint maintained for API compatibility but no longer updates biometric fields
+    Specialized endpoint to save only the biometric data (DID, template, has_template) for a voter.
+    This endpoint ensures that:
+    1. The voter record already exists
+    2. All fields are saved together (no partial biometric data)
+    3. Existing data is preserved if no new data is provided during updates
     """
     try:
-        # Check if voter exists
+        # Check if voter exists - use nationalid as primary key
         try:
             voter = Voter.objects.get(nationalid=voter_id)
         except Voter.DoesNotExist:
             return Response(
-                {'error': f'Voter with ID {voter_id} not found'},
+                {'error': f'Voter with National ID {voter_id} not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
         
         # Validate request data
-        if not request.data or not request.data.get('template'):
+        required_fields = ['did', 'biometric_template']
+        missing_fields = [field for field in required_fields if field not in request.data]
+        if missing_fields:
             return Response(
-                {'error': 'Fingerprint template data is required'},
+                {'error': f'Missing required fields: {", ".join(missing_fields)}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-            
-        # No longer save template data per requirements
-        # Just return success for API compatibility
         
-        return Response(
-            {'success': True, 'message': 'API call received, but biometric fields are no longer updated'},
-            status=status.HTTP_200_OK
-        )
+        # Get data from request
+        did = request.data.get('did')
+        biometric_template = request.data.get('biometric_template')
+        
+        # Validate DID - this is a simple validation, could be more complex
+        if not did or not did.startswith('did:'):
+            return Response(
+                {'error': 'Invalid DID format'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Ensure we have a valid biometric template
+        if not biometric_template:
+            return Response(
+                {'error': 'Biometric template is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Update voter fields with atomic transaction
+        with transaction.atomic():
+            # Save the biometric data
+            voter.did = did
+            voter.biometric_template = biometric_template
+            voter.has_template = True
+            voter.save()
+        
+        return Response({
+            'success': True, 
+            'message': 'Voter biometric data saved successfully',
+            'voter_nationalid': voter.nationalid
+        }, status=status.HTTP_200_OK)
+    
     except Exception as e:
         return Response(
             {'error': str(e)},
@@ -297,75 +333,70 @@ def save_voter_biometric_template(request, voter_id):
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
-def save_keyperson_biometric_template(request, keyperson_id):
+def save_keyperson_biometric_data(request, keyperson_id):
     """
-    Endpoint maintained for API compatibility but no longer updates biometric fields
+    Specialized endpoint to save only the biometric data (DID, template, has_template) for a keyperson.
+    This endpoint ensures that:
+    1. The keyperson record already exists
+    2. All fields are saved together (no partial biometric data)
+    3. Existing data is preserved if no new data is provided during updates
     """
     try:
-        # Check if keyperson exists
+        # Check if keyperson exists - use nationalid as primary key
         try:
             keyperson = KeyPerson.objects.get(nationalid=keyperson_id)
         except KeyPerson.DoesNotExist:
             return Response(
-                {'error': f'Keyperson with ID {keyperson_id} not found'},
+                {'error': f'Keyperson with National ID {keyperson_id} not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
         
         # Validate request data
-        if not request.data or not request.data.get('template'):
+        required_fields = ['did', 'biometric_template']
+        missing_fields = [field for field in required_fields if field not in request.data]
+        if missing_fields:
             return Response(
-                {'error': 'Fingerprint template data is required'},
+                {'error': f'Missing required fields: {", ".join(missing_fields)}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-            
-        # No longer save template data per requirements
-        # Just return success for API compatibility
         
-        return Response(
-            {'success': True, 'message': 'API call received, but biometric fields are no longer updated'},
-            status=status.HTTP_200_OK
-        )
+        # Get data from request
+        did = request.data.get('did')
+        biometric_template = request.data.get('biometric_template')
+        
+        # Validate DID - this is a simple validation, could be more complex
+        if not did or not did.startswith('did:'):
+            return Response(
+                {'error': 'Invalid DID format'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Ensure we have a valid biometric template
+        if not biometric_template:
+            return Response(
+                {'error': 'Biometric template is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Update keyperson fields with atomic transaction
+        with transaction.atomic():
+            # Save the biometric data
+            keyperson.did = did
+            keyperson.biometric_template = biometric_template
+            keyperson.has_template = True
+            keyperson.save()
+        
+        return Response({
+            'success': True, 
+            'message': 'Keyperson biometric data saved successfully',
+            'keyperson_nationalid': keyperson.nationalid
+        }, status=status.HTTP_200_OK)
+    
     except Exception as e:
         return Response(
             {'error': str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
-
-@api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
-def update_voter_biometric_did(request, voter_id):
-    """
-    Endpoint maintained for API compatibility but no longer updates biometric data or DID fields
-    """
-    try:
-        # Check if voter exists
-        try:
-            voter = Voter.objects.get(id=voter_id)
-        except Voter.DoesNotExist:
-            return Response({
-                'status': 'error',
-                'message': f'Voter with ID {voter_id} not found'
-            }, status=404)
-        
-        # No longer update these fields per requirements:
-        # - did
-        # - biometric_template
-        # - has_template
-        # - blockchain_tx_id
-        # - blockchain_subnet_id
-        
-        # Return success for API compatibility
-        return Response({
-            'status': 'success',
-            'message': 'API call received, but biometric and DID fields are no longer updated',
-            'voter_id': str(voter.id)
-        })
-        
-    except Exception as e:
-        return Response({
-            'status': 'error',
-            'message': str(e)
-        }, status=500)
 
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
@@ -447,6 +478,55 @@ class VoterViewSet(viewsets.ModelViewSet):
     """
     queryset = Voter.objects.all().order_by('surname')
     serializer_class = VoterSerializer
+    
+    def create(self, request, *args, **kwargs):
+        # First check if biometric data is included in the request
+        has_biometric = bool(request.data.get('did') and request.data.get('biometric_template'))
+        
+        # Create the voter with a transaction to ensure atomicity
+        with transaction.atomic():
+            # Standard voter creation process
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            self.perform_create(serializer)
+            headers = self.get_success_headers(serializer.data)
+            
+            # If biometric data is included, update the voter with this data
+            if has_biometric:
+                voter = serializer.instance
+                voter.did = request.data.get('did')
+                voter.biometric_template = request.data.get('biometric_template')
+                voter.has_template = True
+                voter.save()
+            
+            return Response(
+                serializer.data, 
+                status=status.HTTP_201_CREATED, 
+                headers=headers
+            )
+    
+    def update(self, request, *args, **kwargs):
+        # Check if biometric data is included in the request
+        has_biometric = bool(request.data.get('did') and request.data.get('biometric_template'))
+        
+        # If biometric data is present, ensure it's saved
+        with transaction.atomic():
+            # Get the instance to update
+            instance = self.get_object()
+            
+            # First update non-biometric data
+            serializer = self.get_serializer(instance, data=request.data, partial=kwargs.get('partial', False))
+            serializer.is_valid(raise_exception=True)
+            self.perform_update(serializer)
+            
+            # If biometric data is provided, update those fields too
+            if has_biometric:
+                instance.did = request.data.get('did')
+                instance.biometric_template = request.data.get('biometric_template')
+                instance.has_template = True
+                instance.save()
+            
+            return Response(serializer.data)
 
 
 class KeyPersonViewSet(viewsets.ModelViewSet):
@@ -455,6 +535,55 @@ class KeyPersonViewSet(viewsets.ModelViewSet):
     """
     queryset = KeyPerson.objects.all().order_by('role', 'surname')
     serializer_class = KeyPersonSerializer
+    
+    def create(self, request, *args, **kwargs):
+        # First check if biometric data is included in the request
+        has_biometric = bool(request.data.get('did') and request.data.get('biometric_template'))
+        
+        # Create the keyperson with a transaction to ensure atomicity
+        with transaction.atomic():
+            # Standard keyperson creation process
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            self.perform_create(serializer)
+            headers = self.get_success_headers(serializer.data)
+            
+            # If biometric data is included, update the keyperson with this data
+            if has_biometric:
+                keyperson = serializer.instance
+                keyperson.did = request.data.get('did')
+                keyperson.biometric_template = request.data.get('biometric_template')
+                keyperson.has_template = True
+                keyperson.save()
+            
+            return Response(
+                serializer.data, 
+                status=status.HTTP_201_CREATED, 
+                headers=headers
+            )
+    
+    def update(self, request, *args, **kwargs):
+        # Check if biometric data is included in the request
+        has_biometric = bool(request.data.get('did') and request.data.get('biometric_template'))
+        
+        # If biometric data is present, ensure it's saved
+        with transaction.atomic():
+            # Get the instance to update
+            instance = self.get_object()
+            
+            # First update non-biometric data
+            serializer = self.get_serializer(instance, data=request.data, partial=kwargs.get('partial', False))
+            serializer.is_valid(raise_exception=True)
+            self.perform_update(serializer)
+            
+            # If biometric data is provided, update those fields too
+            if has_biometric:
+                instance.did = request.data.get('did')
+                instance.biometric_template = request.data.get('biometric_template')
+                instance.has_template = True
+                instance.save()
+            
+            return Response(serializer.data)
 
 
 class CandidateViewSet(viewsets.ModelViewSet):

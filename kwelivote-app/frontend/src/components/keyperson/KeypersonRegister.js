@@ -161,153 +161,134 @@ const KeypersonRegister = () => {
     setIsObserver(false);
     setCurrentStep(1);
   };
-  
-  const handleSubmit = async (e) => {
+
+  // Handle form submission
+  const handleFormSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
     setError('');
-    
+    setShowSuccess(false);
+
     try {
-      // Validation checks before submission
+      // Validate required fields
+      const requiredFields = ['firstname', 'surname', 'nationalid', 'designatedPollingStation', 'role'];
+      const missingFields = requiredFields.filter(field => !formData[field]);
+      
+      if (missingFields.length > 0) {
+        // Convert camelCase field names to human-readable format for the error message
+        const formattedMissingFields = missingFields.map(field => {
+          if (field === 'designatedPollingStation') return 'designated polling station';
+          return field;
+        });
+        setError(`Please fill in all required fields: ${formattedMissingFields.join(', ')}`);
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Role-specific validation
       if (formData.role === 'Observers' && !formData.observerType) {
         setError('Observer type is required for Observers');
         setIsSubmitting(false);
         return;
       }
-      
+
       if (formData.role === 'Party Agents' && !formData.politicalParty) {
         setError('Political party is required for Party Agents');
         setIsSubmitting(false);
         return;
       }
 
-      // Prepare data for API with correct field names
-      const keypersonData = {
-        nationalid: formData.nationalid,
-        firstname: formData.firstname,
-        middlename: formData.middlename || null,
-        surname: formData.surname,
-        role: formData.role,
-        political_party: formData.politicalParty || null,
-        designated_polling_station: formData.designatedPollingStation,
-        observer_type: formData.observerType || null,
-        stakeholder: formData.stakeholder || null,
-        created_by: 'system',
-        biometric_data: null,
-        biometric_image: null,
-      };
+      // Username and password validation for non-Observers in non-edit mode
+      if (!isEditMode && formData.role !== 'Observers' && (!formData.username || !formData.password)) {
+        setError('Username and password are required for non-observer keypersons');
+        setIsSubmitting(false);
+        return;
+      }
+
+      let apiResponse;
       
-      if (!isEditMode) {
-        // For new keypersons
-        // No longer set DID, biometric template or blockchain-related fields
-        
-        // Use the transaction-based endpoint for new keypersons
-        const combinedData = {
-          ...keypersonData,
-          // User data - included in the same request for non-observers
-          ...((!isObserver) && {
-            username: formData.username,
-            password: formData.password,
-          })
-        };
-        
-        // Remove fields that should not be handled
-        delete combinedData.did;
-        delete combinedData.has_template;
-        delete combinedData.blockchain_tx_id;
-        delete combinedData.blockchain_subnet_id;
-        
-        // Create keyperson with user if applicable
-        const result = await keypersonAPI.createKeypersonWithUser(combinedData);
-        console.log('Registration result:', result);
-        
-        setSuccessMessage('Keyperson registered successfully!');
-      } else {
-        // For existing keypersons, update the record without DID and biometric fields
-        
-        // Remove fields that should not be handled
-        delete keypersonData.did;
-        delete keypersonData.has_template;
-        delete keypersonData.blockchain_tx_id;
-        delete keypersonData.blockchain_subnet_id;
-        
-        // Skip user account details when updating
-        const updatedKeyperson = await keypersonAPI.updateKeyperson(editingKeypersonId, keypersonData);
-        console.log('Keyperson updated:', updatedKeyperson);
+      // Check if we have biometric data available
+      const hasBiometricData = !!(formData.biometricData?.did && formData.biometricData?.biometric_template);
+
+      if (isEditMode) {
+        // Update an existing keyperson
+        apiResponse = await keypersonAPI.updateKeyperson(editingKeypersonId, {
+          ...formData,
+          // Transform fields to match API expectations
+          designated_polling_station: formData.designatedPollingStation,
+          political_party: formData.politicalParty,
+          observer_type: formData.observerType,
+          created_by: sessionStorage.getItem('userInfo') 
+            ? JSON.parse(sessionStorage.getItem('userInfo')).user?.username || 'anonymous' 
+            : 'anonymous',
+          // Include biometric data if available
+          ...(hasBiometricData ? {
+            did: formData.biometricData.did,
+            biometric_template: formData.biometricData.biometric_template
+          } : {})
+        });
         
         setSuccessMessage('Keyperson updated successfully!');
-        
-        // Reset edit mode after successful update
-        setIsEditMode(false);
-        setEditingKeypersonId(null);
-      }
-      
-      // We no longer handle biometric data upload/update
-      
-      // Show success message
-      setShowSuccess(true);
-      
-      // Reset form after successful submission
-      setTimeout(() => {
-        setFormData({
-          nationalid: '',
-          firstname: '',
-          middlename: '',
-          surname: '',
-          role: '',
-          politicalParty: '',
-          designatedPollingStation: '',
-          observerType: '',
-          stakeholder: '',
-          biometricData: null,
-          biometricImage: null,
-          username: '',
-          password: '',
-          confirmPassword: '',
-        });
-        setCurrentStep(1);
-        setShowSuccess(false);
-        setIsObserver(false);
-      }, 3000);
-    } catch (error) {
-      console.error(isEditMode ? 'Error updating keyperson:' : 'Error registering keyperson:', error);
-      
-      // Extract more specific error message if available from the API response
-      if (error.response && error.response.data) {
-        // Handle object or string error responses
-        if (error.response.data.error) {
-          // Direct error message
-          setError(error.response.data.error);
-        } else if (error.response.data.details) {
-          // Detailed validation errors
-          const errorDetails = error.response.data.details;
-          const errorMessages = Object.entries(errorDetails)
-            .map(([key, value]) => {
-              // Handle both array and string error messages
-              const errorValue = Array.isArray(value) ? value.join(', ') : value;
-              return `${key}: ${errorValue}`;
-            })
-            .join('; ');
-          setError(errorMessages);
-        } else {
-          // General case for other error formats
-          const errorMessages = Object.entries(error.response.data)
-            .map(([key, value]) => {
-              const errorValue = Array.isArray(value) ? value.join(', ') : value;
-              return `${key}: ${errorValue}`;
-            })
-            .join('; ');
-          setError(errorMessages || `Failed to ${isEditMode ? 'update' : 'register'} keyperson. Please try again.`);
-        }
+        setShowSuccess(true);
       } else {
-        // For network errors or other non-API errors
-        setError(error.message || `Failed to ${isEditMode ? 'update' : 'register'} keyperson. Please try again.`);
+        // For regular keyperson roles that need a user account
+        if (formData.role !== 'Observers') {
+          // Create keyperson and user in a single transaction
+          const keypersonData = {
+            ...formData,
+            // Transform fields to match API expectations
+            designated_polling_station: formData.designatedPollingStation,
+            political_party: formData.politicalParty,
+            observer_type: formData.observerType,
+            created_by: sessionStorage.getItem('userInfo') 
+              ? JSON.parse(sessionStorage.getItem('userInfo')).user?.username || 'anonymous' 
+              : 'anonymous',
+            // Include biometric data if available
+            ...(hasBiometricData ? {
+              did: formData.biometricData.did,
+              biometric_template: formData.biometricData.biometric_template
+            } : {})
+          };
+          
+          apiResponse = await keypersonAPI.createKeypersonWithUser(keypersonData);
+          
+          setSuccessMessage('Keyperson and user account created successfully!');
+          setShowSuccess(true);
+        } else {
+          // For Observers, only create keyperson (no user account)
+          apiResponse = await keypersonAPI.createKeyperson({
+            ...formData,
+            // Transform fields to match API expectations
+            designated_polling_station: formData.designatedPollingStation,
+            political_party: formData.politicalParty,
+            observer_type: formData.observerType,
+            created_by: sessionStorage.getItem('userInfo') 
+              ? JSON.parse(sessionStorage.getItem('userInfo')).user?.username || 'anonymous' 
+              : 'anonymous',
+            // Include biometric data if available
+            ...(hasBiometricData ? {
+              did: formData.biometricData.did,
+              biometric_template: formData.biometricData.biometric_template
+            } : {})
+          });
+          
+          setSuccessMessage('Observer registered successfully!');
+          setShowSuccess(true);
+        }
       }
+
+      // Reset form if not in edit mode
+      if (!isEditMode) {
+        cancelEdit();
+      }
+    } catch (error) {
+      console.error('Error saving keyperson:', error);
+      setError(error.message || 'An error occurred while saving the keyperson record');
     } finally {
       setIsSubmitting(false);
     }
   };
-  
+
   // Steps for the registration process, conditionally hide step 3 for observers or in edit mode
   const steps = [
     { number: 1, name: 'Personal Details', status: currentStep >= 1 ? 'active' : 'inactive' },
@@ -532,7 +513,7 @@ const KeypersonRegister = () => {
           </div>
         </div>
         
-        <form onSubmit={handleSubmit} className="transition-all duration-300">
+        <form onSubmit={handleFormSubmit} className="transition-all duration-300">
           {currentStep === 1 && (
             <KeypersonStep1
               formData={formData}
@@ -552,7 +533,7 @@ const KeypersonRegister = () => {
               prevStep={prevStep}
               isObserver={isObserver}
               isEditMode={isEditMode}
-              handleSubmit={handleSubmit}
+              handleSubmit={handleFormSubmit}
               error={error}
               successMessage={successMessage}
               isSubmitting={isSubmitting}
@@ -565,7 +546,7 @@ const KeypersonRegister = () => {
               formData={formData}
               handleInputChange={handleInputChange}
               prevStep={prevStep}
-              handleSubmit={handleSubmit}
+              handleSubmit={handleFormSubmit}
               isSubmitting={isSubmitting}
               isEditMode={isEditMode}
             />

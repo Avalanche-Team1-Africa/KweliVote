@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import FingerprintEnrollment from './FingerprintEnrollment';
 import biometricToDID from '../../utils/biometricToDID';
+import apiServices from '../../utils/api';
 
 const VoterStep2 = ({ formData, prevStep, handleSubmit, isSubmitting = false, onEnrollmentComplete, onDIDGenerated, isEditMode }) => {
   const [fingerprintTemplate, setFingerprintTemplate] = useState(null);
@@ -110,20 +111,53 @@ const VoterStep2 = ({ formData, prevStep, handleSubmit, isSubmitting = false, on
 
   const handleFormSubmit = (e) => {
     e.preventDefault();
-
-    if (didResult) {
-      console.log('Submitting with DID:', didResult.didKey);
-      console.log('Private key (should be securely stored):', didResult.privateKey);
-      console.log('Public key:', didResult.publicKey);
-    }
-
-    setShowSuccessMessage(true);
-
-    setTimeout(() => {
-      setShowSuccessMessage(false);
-    }, 3000);
-
+    
+    // First call the parent's handleSubmit to save/update the voter
     handleSubmit(e);
+    
+    // After a short delay to ensure the voter has been created/updated
+    setTimeout(() => {
+      // Only proceed with biometric data if we have both DID and template
+      if (didResult && fingerprintTemplate?.iso_template_base64) {
+        console.log('Submitting with DID:', didResult.didKey);
+        
+        // Access voter ID from formData, which should be updated after voter creation/update
+        const voterId = formData.id || formData.nationalid;
+        
+        if (voterId) {
+          const biometricData = {
+            did: didResult.didKey,
+            biometric_template: fingerprintTemplate.iso_template_base64
+          };
+          
+          // Call the API to save biometric data
+          apiServices.voter.saveBiometricData(voterId, biometricData)
+            .then(response => {
+              console.log('Biometric data saved successfully:', response);
+              setShowSuccessMessage(true);
+              
+              setTimeout(() => {
+                setShowSuccessMessage(false);
+              }, 3000);
+            })
+            .catch(error => {
+              console.error('Error saving biometric data:', error);
+              setLocalFingerprintError(`Failed to save biometric data: ${error.message || 'Unknown error'}`);
+            });
+        } else {
+          console.error('Cannot save biometric data: No voter ID available');
+          setLocalFingerprintError('Cannot save biometric data: No voter ID available');
+        }
+      } else {
+        // If no biometric data is available, still show success message
+        // as the voter details might have been saved successfully
+        setShowSuccessMessage(true);
+        
+        setTimeout(() => {
+          setShowSuccessMessage(false);
+        }, 3000);
+      }
+    }, 500); // Short delay to ensure voter is saved first
   };
 
   const handleEnrollmentComplete = (templateData) => {

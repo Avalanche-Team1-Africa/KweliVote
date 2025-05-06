@@ -28,11 +28,10 @@ from .views import (
     get_user_info,
     create_user,
     create_keyperson_with_user,
-    save_voter_biometric_template,
-    save_keyperson_biometric_template,
-    update_voter_biometric_did,
     search_voters,
-    search_keypersons
+    search_keypersons,
+    save_voter_biometric_data,
+    save_keyperson_biometric_data
 )
 
 # Set up DRF router
@@ -58,17 +57,16 @@ urlpatterns = [
     path('api/users/', create_user, name='create_user'),
     path('api/keyperson-with-user/', create_keyperson_with_user, name='create_keyperson_with_user'),
     
-    # Biometric endpoints
-    path('api/voters/<str:voter_id>/biometric-template/', save_voter_biometric_template, name='save_voter_biometric_template'),
-    path('api/keypersons/<str:keyperson_id>/biometric-template/', save_keyperson_biometric_template, name='save_keyperson_biometric_template'),
-    path('api/voters/<str:voter_id>/biometric-did/', update_voter_biometric_did, name='update_voter_biometric_did'),
-    
     # Search endpoints
     path('api/voters/search/', search_voters, name='search_voters'),
     path('api/keypersons/search/', search_keypersons, name='search_keypersons'),
     
     # Fingerprint template processing endpoints
     path('api/fingerprints/', include('iso_fingerprint_template_app.urls')),
+    
+    # Biometric data endpoints
+    path('api/voters/<str:voter_id>/biometric-data/', save_voter_biometric_data, name='save_voter_biometric_data'),
+    path('api/keypersons/<str:keyperson_id>/biometric-data/', save_keyperson_biometric_data, name='save_keyperson_biometric_data'),
     
     path('api/voters/', include(router.urls)),
     path('api/keypersons/', include(router.urls)),
