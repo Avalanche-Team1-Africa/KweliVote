@@ -1,9 +1,10 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import FingerprintTemplateTest from './fingerprints/FingerprintTemplateTest';
+import { useAuth } from '../utils/AuthContext';
 
 const Home = () => {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   
   const roles = [
     {
@@ -67,9 +68,6 @@ const Home = () => {
 
   return (
     <div className="max-w-4xl mx-auto animate-slide-up">
-      {/* Fingerprint Template Testing Component */}
-      <FingerprintTemplateTest />
-      
       <div className="text-center mb-10">
         <div className="inline-flex items-center justify-center w-24 h-24 bg-kweli-light rounded-full mb-6 shadow-soft">
           <img 
@@ -83,6 +81,20 @@ const Home = () => {
           A secure and transparent electronic voting system. Please select your role to continue:
         </p>
       </div>
+      
+      {isAuthenticated && (
+        <div className="mb-8 flex justify-center">
+          <button
+            onClick={() => navigate('/blockchain-admin')}
+            className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-medium py-3 px-6 rounded-lg shadow-soft hover:shadow-soft-lg transition-all duration-300 transform hover:-translate-y-0.5 flex items-center"
+          >
+            <svg className="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+            </svg>
+            Testing and Blockchain configurations
+          </button>
+        </div>
+      )}
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {roles.map((role) => (

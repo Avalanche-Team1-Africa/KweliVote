@@ -12,6 +12,7 @@ import KeypersonRegister from './components/keyperson/KeypersonRegister';
 import VoterRegister from './components/voter/VoterRegister';
 import DataViewer from './components/viewer/DataViewer';
 import ResultsCount from './components/results/ResultsCount';
+import BlockchainAdmin from './components/admin/BlockchainAdmin';
 
 // Header component with persistent user info and logout
 const Header = () => {
@@ -134,6 +135,16 @@ function App() {
                 element={
                   <ProtectedRoute allowedRoles={['Presiding Officer (PO)', 'Deputy Presiding Officer (DPO)']}>
                     <ResultsCount />
+                  </ProtectedRoute>
+                } 
+              />
+              
+              {/* Blockchain Admin Protected Route - accessible by any authenticated user */}
+              <Route 
+                path="/blockchain-admin" 
+                element={
+                  <ProtectedRoute allowedRoles={['IEBC Constituency Election Coordinators (CECs)', 'Registration Clerk', 'Polling Clerks', 'Presiding Officer (PO)', 'Deputy Presiding Officer (DPO)']}>
+                    <BlockchainAdmin />
                   </ProtectedRoute>
                 } 
               />
