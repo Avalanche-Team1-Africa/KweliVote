@@ -65,6 +65,22 @@ const KeypersonRegister = () => {
       });
     }
   };
+
+  // Handle biometric data from the fingerprint enrollment process
+  const handleBiometricEnrollment = (biometricData) => {
+    if (!biometricData) return;
+    
+    // Store the biometric data in the form state for later submission
+    setFormData({
+      ...formData,
+      biometricData: {
+        did: biometricData.did,
+        biometric_template: biometricData.template?.iso_template_base64
+      }
+    });
+    
+    console.log("Biometric data captured and ready for submission");
+  };
   
   const nextStep = () => {
     setCurrentStep(currentStep + 1);
@@ -212,7 +228,7 @@ const KeypersonRegister = () => {
 
       if (isEditMode) {
         // Update an existing keyperson
-        apiResponse = await keypersonAPI.updateKeyperson(editingKeypersonId, {
+        const keypersonData = {
           ...formData,
           // Transform fields to match API expectations
           designated_polling_station: formData.designatedPollingStation,
@@ -220,13 +236,16 @@ const KeypersonRegister = () => {
           observer_type: formData.observerType,
           created_by: sessionStorage.getItem('userInfo') 
             ? JSON.parse(sessionStorage.getItem('userInfo')).user?.username || 'anonymous' 
-            : 'anonymous',
-          // Include biometric data if available
-          ...(hasBiometricData ? {
-            did: formData.biometricData.did,
-            biometric_template: formData.biometricData.biometric_template
-          } : {})
-        });
+            : 'anonymous'
+        };
+        
+        // Include biometric data if available in a single transaction
+        if (hasBiometricData) {
+          keypersonData.did = formData.biometricData.did;
+          keypersonData.biometric_template = formData.biometricData.biometric_template;
+        }
+        
+        apiResponse = await keypersonAPI.updateKeyperson(editingKeypersonId, keypersonData);
         
         setSuccessMessage('Keyperson updated successfully!');
         setShowSuccess(true);
@@ -242,13 +261,14 @@ const KeypersonRegister = () => {
             observer_type: formData.observerType,
             created_by: sessionStorage.getItem('userInfo') 
               ? JSON.parse(sessionStorage.getItem('userInfo')).user?.username || 'anonymous' 
-              : 'anonymous',
-            // Include biometric data if available
-            ...(hasBiometricData ? {
-              did: formData.biometricData.did,
-              biometric_template: formData.biometricData.biometric_template
-            } : {})
+              : 'anonymous'
           };
+          
+          // Include biometric data if available in a single transaction
+          if (hasBiometricData) {
+            keypersonData.did = formData.biometricData.did;
+            keypersonData.biometric_template = formData.biometricData.biometric_template;
+          }
           
           apiResponse = await keypersonAPI.createKeypersonWithUser(keypersonData);
           
@@ -256,7 +276,7 @@ const KeypersonRegister = () => {
           setShowSuccess(true);
         } else {
           // For Observers, only create keyperson (no user account)
-          apiResponse = await keypersonAPI.createKeyperson({
+          const keypersonData = {
             ...formData,
             // Transform fields to match API expectations
             designated_polling_station: formData.designatedPollingStation,
@@ -264,13 +284,16 @@ const KeypersonRegister = () => {
             observer_type: formData.observerType,
             created_by: sessionStorage.getItem('userInfo') 
               ? JSON.parse(sessionStorage.getItem('userInfo')).user?.username || 'anonymous' 
-              : 'anonymous',
-            // Include biometric data if available
-            ...(hasBiometricData ? {
-              did: formData.biometricData.did,
-              biometric_template: formData.biometricData.biometric_template
-            } : {})
-          });
+              : 'anonymous'
+          };
+          
+          // Include biometric data if available in a single transaction
+          if (hasBiometricData) {
+            keypersonData.did = formData.biometricData.did;
+            keypersonData.biometric_template = formData.biometricData.biometric_template;
+          }
+          
+          apiResponse = await keypersonAPI.createKeyperson(keypersonData);
           
           setSuccessMessage('Observer registered successfully!');
           setShowSuccess(true);
@@ -538,6 +561,7 @@ const KeypersonRegister = () => {
               successMessage={successMessage}
               isSubmitting={isSubmitting}
               showSuccess={showSuccess}
+              onEnrollmentComplete={handleBiometricEnrollment}
             />
           )}
           

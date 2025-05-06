@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import FingerprintEnrollment from '../voter/FingerprintEnrollment'; // Reuse the voter component
 import biometricToDID from '../../utils/biometricToDID';
 import apiServices from '../../utils/api';
@@ -13,6 +13,11 @@ const KeypersonStep2 = ({ formData, nextStep, prevStep, isObserver, onEnrollment
   const [conversionLog, setConversionLog] = useState([]);
   const [showConversionDetails, setShowConversionDetails] = useState(false);
   const [currentStep, setCurrentStep] = useState(null);
+  
+  // Add a processing flag ref to prevent multiple executions
+  const isProcessingRef = useRef(false);
+  // Add template ID tracking to avoid reprocessing the same template
+  const processedTemplateIdRef = useRef(null);
 
   const workflowSteps = [
     { id: 'fingerprint', label: 'Fingerprint' },
@@ -27,61 +32,15 @@ const KeypersonStep2 = ({ formData, nextStep, prevStep, isObserver, onEnrollment
   const handleNext = async (e) => {
     e.preventDefault();
     
-    // First submit the form to save/update the keyperson basic details
+    // For observers and edit mode, submit the form directly
     if (isEditMode || isObserver) {
       if (handleSubmit) {
-        // Clear local states
-        setLocalError('');
-        setShowLocalSuccess(false);
-        
-        try {
-          // Submit the form using the parent's handleSubmit function
-          await handleSubmit(e);
-          
-          // After the keyperson is saved/updated, handle biometric data if available
-          if (didResult && fingerprintTemplate?.iso_template_base64 && formData.id) {
-            await saveBiometricData();
-          }
-        } catch (error) {
-          console.error('Error during keyperson save/update:', error);
-          setLocalError(error.message || 'An error occurred during save/update');
-        }
+        handleSubmit(e);
       }
     } else {
       // For new keypersons not in edit mode, just proceed to the next step
       // Biometric data will be saved after the full registration process is complete
       nextStep();
-    }
-  };
-
-  // Extract the biometric data saving logic to a separate function
-  const saveBiometricData = async () => {
-    if (!didResult || !fingerprintTemplate?.iso_template_base64) {
-      setLocalFingerprintError('Missing biometric data or DID');
-      return false;
-    }
-    
-    const keypersonId = formData.id || formData.nationalid;
-    
-    if (!keypersonId) {
-      setLocalFingerprintError('Cannot save biometric data: No keyperson ID available');
-      return false;
-    }
-    
-    try {
-      const biometricData = {
-        did: didResult.didKey,
-        biometric_template: fingerprintTemplate.iso_template_base64
-      };
-      
-      // Call the API to save biometric data
-      const response = await apiServices.keyperson.saveBiometricData(keypersonId, biometricData);
-      console.log('Keyperson biometric data saved successfully:', response);
-      return true;
-    } catch (error) {
-      console.error('Error saving keyperson biometric data:', error);
-      setLocalFingerprintError(`Failed to save biometric data: ${error.message || 'Unknown error'}`);
-      return false;
     }
   };
 
@@ -91,90 +50,106 @@ const KeypersonStep2 = ({ formData, nextStep, prevStep, isObserver, onEnrollment
   };
 
   useEffect(() => {
-    if (fingerprintTemplate && formData.nationalid) {
-      try {
-        setConversionLog([]);
-        setCurrentStep('fingerprint');
-        setLocalFingerprintError(''); // Clear any previous errors
+    // Skip processing if we're already processing or if this template was already processed
+    if (isProcessingRef.current || 
+        !fingerprintTemplate || 
+        !formData.nationalid ||
+        (processedTemplateIdRef.current === fingerprintTemplate.iso_template_id)) {
+      return;
+    }
 
-        // Log the final fingerprint template
-        console.log('Final fingerprint template generated:', JSON.stringify(fingerprintTemplate, null, 2));
-        
-        // Verify that we have an ISO template from the API
-        if (!fingerprintTemplate.iso_template_base64) {
-          throw new Error('Missing ISO template base64 data from the API');
-        }
-        
-        console.log('Using received base64 ISO template from API for DID generation');
+    // Set processing flag to true to prevent re-entry
+    isProcessingRef.current = true;
+    
+    try {
+      setConversionLog([]);
+      setCurrentStep('fingerprint');
+      setLocalFingerprintError(''); // Clear any previous errors
 
-        // Improved step detection with alternative pattern matching
-        const originalConsoleLog = console.log;
-        console.log = (message) => {
-          originalConsoleLog(message);
-          if (typeof message === 'string') {
-            // Enhanced pattern matching for step detection
-            if (message.includes("STEP 1") || message.includes("Extracting standardized ISO template")) {
-              setCurrentStep('template');
-              setConversionLog(prevLogs => [...prevLogs, "STEP 1: Extracting ISO template"]);
-            }
-            else if (message.includes("STEP 2") || message.includes("biometric stabilization")) {
-              setCurrentStep('stabilization');
-              setConversionLog(prevLogs => [...prevLogs, "STEP 2: Applying biometric stabilization"]);
-            }
-            else if (message.includes("STEP 3") || message.includes("stable secret key")) {
-              setCurrentStep('secretKey');
-              setConversionLog(prevLogs => [...prevLogs, "STEP 3: Generating stable secret key"]);
-            }
-            else if (message.includes("STEP 4") || message.includes("hash") || message.includes("SHA-256")) {
-              setCurrentStep('hash');
-              setConversionLog(prevLogs => [...prevLogs, "STEP 4: Creating cryptographic hash"]);
-            }
-            else if (message.includes("STEP 5") || message.includes("Deriving") || message.includes("key pair")) {
-              setCurrentStep('keyPair');
-              setConversionLog(prevLogs => [...prevLogs, "STEP 5: Generating cryptographic keypair"]);
-            }
-            else if (message.includes("STEP 7") || message.includes("DID:key") || message.includes("Generating DID")) {
-              setCurrentStep('did');
-              setConversionLog(prevLogs => [...prevLogs, "STEP 7: Creating DID from public key"]);
-            }
-            else if (message.includes("Starting biometric") || message.includes("✅") || message.includes("completed successfully")) {
-              setConversionLog(prevLogs => [...prevLogs, message]);
-            }
+      // Store the template ID we're processing
+      processedTemplateIdRef.current = fingerprintTemplate.iso_template_id;
+
+      // Log the final fingerprint template
+      console.log('Final fingerprint template generated:', JSON.stringify(fingerprintTemplate, null, 2));
+      
+      // Verify that we have an ISO template from the API
+      if (!fingerprintTemplate.iso_template_base64) {
+        throw new Error('Missing ISO template base64 data from the API');
+      }
+      
+      console.log('Using received base64 ISO template from API for DID generation');
+
+      // Improved step detection with alternative pattern matching
+      const originalConsoleLog = console.log;
+      console.log = (message) => {
+        originalConsoleLog(message);
+        if (typeof message === 'string') {
+          // Enhanced pattern matching for step detection
+          if (message.includes("STEP 1") || message.includes("Extracting standardized ISO template")) {
+            setCurrentStep('template');
+            setConversionLog(prevLogs => [...prevLogs, "STEP 1: Extracting ISO template"]);
           }
-        };
-
-        // Force a small delay to ensure UI can show the initial step before proceeding
-        setTimeout(() => {
-          try {
-            const result = biometricToDID(fingerprintTemplate, formData.nationalid);
-            setDidResult(result);
-            
-            // Force the last step to be marked as complete
+          else if (message.includes("STEP 2") || message.includes("biometric stabilization")) {
+            setCurrentStep('stabilization');
+            setConversionLog(prevLogs => [...prevLogs, "STEP 2: Applying biometric stabilization"]);
+          }
+          else if (message.includes("STEP 3") || message.includes("stable secret key")) {
+            setCurrentStep('secretKey');
+            setConversionLog(prevLogs => [...prevLogs, "STEP 3: Generating stable secret key"]);
+          }
+          else if (message.includes("STEP 4") || message.includes("hash") || message.includes("SHA-256")) {
+            setCurrentStep('hash');
+            setConversionLog(prevLogs => [...prevLogs, "STEP 4: Creating cryptographic hash"]);
+          }
+          else if (message.includes("STEP 5") || message.includes("Deriving") || message.includes("key pair")) {
+            setCurrentStep('keyPair');
+            setConversionLog(prevLogs => [...prevLogs, "STEP 5: Generating cryptographic keypair"]);
+          }
+          else if (message.includes("STEP 7") || message.includes("DID:key") || message.includes("Generating DID")) {
             setCurrentStep('did');
-            
-            if (onEnrollmentComplete) {
-              // Pass both template and DID information to parent
-              onEnrollmentComplete({
-                template: fingerprintTemplate,
-                did: result.didKey,
-                privateKey: result.privateKey,
-                publicKey: result.publicKey
-              });
-            }
-          } catch (error) {
-            console.error('Error during biometric to DID conversion:', error);
-            setConversionLog(prevLogs => [...prevLogs, `Error: ${error.message}`]);
-            setLocalFingerprintError(`Error during biometric to DID conversion: ${error.message}`);
+            setConversionLog(prevLogs => [...prevLogs, "STEP 7: Creating DID from public key"]);
           }
+          else if (message.includes("Starting biometric") || message.includes("✅") || message.includes("completed successfully")) {
+            setConversionLog(prevLogs => [...prevLogs, message]);
+          }
+        }
+      };
+
+      // Force a small delay to ensure UI can show the initial step before proceeding
+      setTimeout(() => {
+        try {
+          const result = biometricToDID(fingerprintTemplate, formData.nationalid);
+          setDidResult(result);
           
+          // Force the last step to be marked as complete
+          setCurrentStep('did');
+          
+          if (onEnrollmentComplete) {
+            // Pass both template and DID information to parent - only call this once
+            onEnrollmentComplete({
+              template: fingerprintTemplate,
+              did: result.didKey,
+              privateKey: result.privateKey,
+              publicKey: result.publicKey
+            });
+          }
+        } catch (error) {
+          console.error('Error during biometric to DID conversion:', error);
+          setConversionLog(prevLogs => [...prevLogs, `Error: ${error.message}`]);
+          setLocalFingerprintError(`Error during biometric to DID conversion: ${error.message}`);
+        } finally {
           // Restore original console.log
           console.log = originalConsoleLog;
-        }, 100);
-      } catch (error) {
-        console.error('Error during biometric to DID conversion:', error);
-        setConversionLog(prevLogs => [...prevLogs, `Error: ${error.message}`]);
-        setLocalFingerprintError(`Error during biometric to DID conversion: ${error.message}`);
-      }
+          // Reset the processing flag when done
+          isProcessingRef.current = false;
+        }
+      }, 100);
+    } catch (error) {
+      console.error('Error during biometric to DID conversion:', error);
+      setConversionLog(prevLogs => [...prevLogs, `Error: ${error.message}`]);
+      setLocalFingerprintError(`Error during biometric to DID conversion: ${error.message}`);
+      // Reset the processing flag on error
+      isProcessingRef.current = false;
     }
   }, [fingerprintTemplate, formData.nationalid, onEnrollmentComplete]);
 
