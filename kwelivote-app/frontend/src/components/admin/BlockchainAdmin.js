@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import BlockchainSetup from './BlockchainSetup';
+import BlockchainAccountSetup from './BlockchainAccountSetup';
 import BlockchainExplorer from './BlockchainExplorer';
 import FingerprintTemplateTest from '../fingerprints/FingerprintTemplateTest';
 
 const BlockchainAdmin = () => {
-  const [activeTab, setActiveTab] = useState('setup');
+  const [activeTab, setActiveTab] = useState('account');
 
   return (
     <div className="max-w-6xl mx-auto animate-fade-in">
@@ -19,6 +19,16 @@ const BlockchainAdmin = () => {
       <div className="flex justify-center mb-8">
         <div className="inline-flex bg-white rounded-lg shadow-soft p-1 flex-wrap">
           <button
+            onClick={() => setActiveTab('account')}
+            className={`px-6 py-3 rounded-lg font-medium transition-colors duration-200 ${
+              activeTab === 'account' 
+                ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-soft' 
+                : 'text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            Blockchain Account
+          </button>
+          <button
             onClick={() => setActiveTab('fingerprint')}
             className={`px-6 py-3 rounded-lg font-medium transition-colors duration-200 ${
               activeTab === 'fingerprint' 
@@ -27,16 +37,6 @@ const BlockchainAdmin = () => {
             }`}
           >
             ISO Fingerprint Testing
-          </button>
-          <button
-            onClick={() => setActiveTab('setup')}
-            className={`px-6 py-3 rounded-lg font-medium transition-colors duration-200 ${
-              activeTab === 'setup' 
-                ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-soft' 
-                : 'text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            Blockchain Setup
           </button>
           <button
             onClick={() => setActiveTab('explorer')}
@@ -53,8 +53,8 @@ const BlockchainAdmin = () => {
 
       {/* Active component based on selected tab */}
       <div className="transition-all duration-300">
+        {activeTab === 'account' && <BlockchainAccountSetup />}
         {activeTab === 'fingerprint' && <FingerprintTemplateTest />}
-        {activeTab === 'setup' && <BlockchainSetup />}
         {activeTab === 'explorer' && <BlockchainExplorer />}
       </div>
 

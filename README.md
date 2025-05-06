@@ -318,3 +318,183 @@ bozorth3 fingerprint1.xyt fingerprint2.xyt
 - Raw fingerprint data never leaves the user's device
 - Only derived DIDs (which cannot be reversed) are sent to the server
 - Private keys are properly handled and secured
+
+## Smart Contract Deployment to Avalanche
+
+### Prerequisites
+
+1. **Node.js and npm**:
+   ```bash
+   # Check if Node.js and npm are installed
+   node --version
+   npm --version
+   
+   # If not installed, install them through your package manager
+   # For Ubuntu/Debian:
+   sudo apt update
+   sudo apt install nodejs npm
+   ```
+
+2. **Install Hardhat**:
+   ```bash
+   # Navigate to the frontend directory
+   cd kwelivote-app/frontend
+   
+   # Install Hardhat locally
+   npm install --save-dev hardhat
+   ```
+
+3. **Configure Environment Variables**:
+   - Create a `.env` file in the frontend directory:
+   ```bash
+   touch .env
+   ```
+   - Add your private key and API keys:
+   ```
+   # Wallet private key for contract deployment (without 0x prefix)
+   PRIVATE_KEY=your_private_key_here
+   
+   # Avalanche Fuji Testnet RPC URL and Chain ID
+   REACT_APP_AVALANCHE_API=https://api.avax-test.network
+   REACT_APP_AVALANCHE_CHAIN_ID=43113
+   REACT_APP_AVALANCHE_RPC_ENDPOINT=https://api.avax-test.network/ext/bc/C/rpc
+   REACT_APP_AVALANCHE_EXPLORER_URL=https://testnet.snowtrace.io
+   ```
+
+### Deployment Steps
+
+1. **Configure Hardhat**:
+   - Make sure your `hardhat.config.js` includes the Avalanche Fuji testnet configuration:
+
+   ```javascript
+   require("@nomicfoundation/hardhat-toolbox");
+   require('dotenv').config();
+   
+   const PRIVATE_KEY = process.env.PRIVATE_KEY || "";
+   
+   module.exports = {
+     solidity: "0.8.19",
+     networks: {
+       fuji: {
+         url: process.env.REACT_APP_AVALANCHE_RPC_ENDPOINT || "https://api.avax-test.network/ext/bc/C/rpc",
+         chainId: parseInt(process.env.REACT_APP_AVALANCHE_CHAIN_ID || "43113"),
+         accounts: PRIVATE_KEY ? [`0x${PRIVATE_KEY}`] : [],
+         gasPrice: 225000000000,
+       },
+       mainnet: {
+         url: "https://api.avax.network/ext/bc/C/rpc",
+         chainId: 43114,
+         accounts: PRIVATE_KEY ? [`0x${PRIVATE_KEY}`] : [],
+         gasPrice: 225000000000,
+       }
+     },
+     etherscan: {
+       apiKey: process.env.SNOWTRACE_API_KEY,
+     },
+   };
+   ```
+
+2. **Install Required Dependencies**:
+   ```bash
+   npm install --save-dev @nomicfoundation/hardhat-toolbox dotenv
+   ```
+
+3. **Compile Smart Contract**:
+   ```bash
+   npx hardhat compile
+   ```
+
+4. **Deploy to Avalanche Fuji Testnet**:
+   - Create or modify a deployment script in `scripts/deploy.js`:
+   
+   ```javascript
+   const hre = require("hardhat");
+
+   async function main() {
+     console.log("Deploying VoterDID contract to Avalanche Fuji Testnet...");
+   
+     // Get the ContractFactory
+     const VoterDID = await hre.ethers.getContractFactory("VoterDID");
+     
+     // Deploy it
+     const voterDID = await VoterDID.deploy();
+     
+     // Wait for deployment to finish
+     await voterDID.deployed();
+   
+     console.log(`VoterDID deployed to: ${voterDID.address}`);
+     console.log(`Transaction hash: ${voterDID.deployTransaction.hash}`);
+     console.log(`Block number: ${voterDID.deployTransaction.blockNumber}`);
+     console.log("View on explorer:", `${process.env.REACT_APP_AVALANCHE_EXPLORER_URL}/address/${voterDID.address}`);
+   
+     return voterDID;
+   }
+   
+   main()
+     .then(() => process.exit(0))
+     .catch((error) => {
+       console.error("Deployment failed:", error);
+       process.exit(1);
+     });
+   ```
+   
+   - Run deployment:
+   ```bash
+   npx hardhat run scripts/deploy.js --network fuji
+   ```
+   
+5. **Verify Smart Contract on Snowtrace (Optional)**:
+   ```bash
+   # Get your contract address from the deployment output
+   npx hardhat verify --network fuji YOUR_CONTRACT_ADDRESS
+   ```
+
+6. **Update Frontend Configuration**:
+   - Add the deployed contract address to your `.env` file:
+   ```
+   REACT_APP_VOTER_DID_CONTRACT_ADDRESS=your_deployed_contract_address
+   ```
+
+### Testing the Deployed Contract
+
+1. **Manual Testing via Hardhat Console**:
+   ```bash
+   npx hardhat console --network fuji
+   
+   # Inside the console:
+   > const VoterDID = await ethers.getContractFactory("VoterDID")
+   > const contract = await VoterDID.attach("YOUR_DEPLOYED_CONTRACT_ADDRESS")
+   > await contract.registerDID("TEST123", "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK")
+   > await contract.getDID("TEST123")
+   ```
+
+2. **Run Contract Tests**:
+   ```bash
+   npx hardhat test --network fuji
+   ```
+
+### Common Issues and Solutions
+
+1. **Not enough funds**: Ensure your wallet has enough AVAX for deployment
+   - Get test AVAX from the [Fuji Testnet Faucet](https://faucet.avax.network/)
+
+2. **Gas price errors**: Update the gasPrice in hardhat.config.js
+
+3. **Network connectivity issues**: Check that the RPC endpoint is correct and accessible
+
+4. **Transaction underpriced**: Increase gasPrice in your hardhat.config.js
+
+5. **Nonce too high/low**: If you're reusing a wallet address, you may need to reset your account nonce:
+   ```bash
+   # Check your current nonce
+   npx hardhat run scripts/check-nonce.js --network fuji
+   ```
+
+6. **Contract verification failures**: Ensure you're using the exact compiler version used for deployment
+
+### Further Resources
+
+- [Avalanche Documentation](https://docs.avax.network/)
+- [Hardhat Documentation](https://hardhat.org/getting-started/)
+- [Fuji Testnet Explorer](https://testnet.snowtrace.io/)
+- [Avalanche Fuji Testnet Faucet](https://faucet.avax.network/)
