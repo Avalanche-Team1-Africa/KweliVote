@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import FingerprintEnrollment from './FingerprintEnrollment';
 import biometricToDID from '../../utils/biometricToDID';
 import apiServices from '../../utils/api';
+import blockchainService from '../../services/BlockchainService';
 
 const VoterStep2 = ({ formData, prevStep, handleSubmit, isSubmitting = false, onEnrollmentComplete, onDIDGenerated, isEditMode }) => {
   const [fingerprintTemplate, setFingerprintTemplate] = useState(null);
@@ -11,6 +12,10 @@ const VoterStep2 = ({ formData, prevStep, handleSubmit, isSubmitting = false, on
   const [currentStep, setCurrentStep] = useState(null);
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [localFingerprintError, setLocalFingerprintError] = useState('');
+  const [blockchainTxInfo, setBlockchainTxInfo] = useState(null);
+  const [isSavingToBlockchain, setIsSavingToBlockchain] = useState(false);
+  const [blockchainAddress, setBlockchainAddress] = useState('');
+  const [blockchainError, setBlockchainError] = useState('');
 
   const workflowSteps = [
     { id: 'fingerprint', label: 'Fingerprint' },
@@ -130,20 +135,56 @@ const VoterStep2 = ({ formData, prevStep, handleSubmit, isSubmitting = false, on
             biometric_template: fingerprintTemplate.iso_template_base64
           };
           
-          // Call the API to save biometric data
-          apiServices.voter.saveBiometricData(voterId, biometricData)
-            .then(response => {
-              console.log('Biometric data saved successfully:', response);
-              setShowSuccessMessage(true);
+          // Set loading state for blockchain
+          setIsSavingToBlockchain(true);
+          setBlockchainError('');
+          
+          // Initialize blockchain service
+          blockchainService.initialize().then(isInitialized => {
+            if (isInitialized) {
+              // Extract blockchain address from public key
+              // This is a simple approach - in a production app, this would be more robust
+              const address = `0x${didResult.publicKey.slice(-40)}`;
+              setBlockchainAddress(address);
               
-              setTimeout(() => {
-                setShowSuccessMessage(false);
-              }, 3000);
-            })
-            .catch(error => {
-              console.error('Error saving biometric data:', error);
-              setLocalFingerprintError(`Failed to save biometric data: ${error.message || 'Unknown error'}`);
-            });
+              // Save DID to blockchain
+              return blockchainService.storeDID(voterId, didResult.didKey);
+            } else {
+              throw new Error('Failed to initialize blockchain connection');
+            }
+          }).then(result => {
+            if (result.success) {
+              // Store blockchain transaction information
+              setBlockchainTxInfo({
+                transactionHash: result.transactionHash,
+                blockNumber: result.blockNumber
+              });
+              
+              // Call the API to save biometric data
+              return apiServices.voter.saveBiometricData(voterId, {
+                ...biometricData,
+                blockchain_tx_id: result.transactionHash
+              });
+            } else {
+              throw new Error(result.error || 'Failed to store DID on blockchain');
+            }
+          })
+          .then(response => {
+            console.log('Biometric data saved successfully:', response);
+            // Show success modal with all required information
+            setShowSuccessMessage(true);
+            setIsSavingToBlockchain(false);
+            
+            setTimeout(() => {
+              setShowSuccessMessage(false);
+            }, 10000); // Show for longer (10 seconds) to give users time to read the blockchain details
+          })
+          .catch(error => {
+            console.error('Error saving data:', error);
+            setLocalFingerprintError(`Failed to save data: ${error.message || 'Unknown error'}`);
+            setBlockchainError(error.message || 'Failed to store DID on blockchain');
+            setIsSavingToBlockchain(false);
+          });
         } else {
           console.error('Cannot save biometric data: No voter ID available');
           setLocalFingerprintError('Cannot save biometric data: No voter ID available');
@@ -195,14 +236,59 @@ const VoterStep2 = ({ formData, prevStep, handleSubmit, isSubmitting = false, on
               <p className="mt-2 text-sm text-gray-600">
                 {isEditMode 
                   ? 'The voter record has been updated with the new information.' 
-                  : 'The voter has been registered successfully with a blockchain identity.'}
+                  : 'The voter has been registered successfully with blockchain identity.'}
               </p>
-              {didResult && (
-                <div className="mt-3 inline-block bg-gray-50 rounded-lg border border-gray-200 px-3 py-2">
-                  <span className="block text-xs text-gray-500 mb-1">BLOCKCHAIN IDENTITY (DID)</span>
-                  <span className="font-mono text-xs text-gray-800 truncate max-w-full block">{didResult.didKey}</span>
+              
+              <div className="mt-4 bg-gray-50 p-4 rounded-lg border border-gray-200 text-left">
+                <h4 className="text-sm font-semibold text-gray-800 mb-3">Voter Information</h4>
+                
+                <div className="space-y-3">
+                  {/* National ID */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500">NATIONAL ID</label>
+                    <div className="font-mono text-sm bg-white p-2 rounded border border-gray-200 mt-1">
+                      {formData.nationalid}
+                    </div>
+                  </div>
+                  
+                  {/* DID:key */}
+                  {didResult && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500">DECENTRALIZED IDENTIFIER (DID)</label>
+                      <div className="font-mono text-xs bg-white p-2 rounded border border-gray-200 mt-1 truncate">
+                        {didResult.didKey}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Blockchain Address */}
+                  {blockchainAddress && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500">BLOCKCHAIN ADDRESS</label>
+                      <div className="font-mono text-xs bg-white p-2 rounded border border-gray-200 mt-1 truncate">
+                        {blockchainAddress}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Transaction Info */}
+                  {blockchainTxInfo && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500">TRANSACTION HASH</label>
+                      <div className="font-mono text-xs bg-white p-2 rounded border border-gray-200 mt-1 truncate">
+                        {blockchainTxInfo.transactionHash}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
+              
+              <button
+                onClick={() => setShowSuccessMessage(false)}
+                className="mt-4 px-4 py-2 bg-kweli-primary text-white rounded-md hover:bg-kweli-primary/90 transition-colors"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
@@ -412,16 +498,16 @@ const VoterStep2 = ({ formData, prevStep, handleSubmit, isSubmitting = false, on
         <button
           type="button"
           onClick={handleFormSubmit}
-          disabled={isSubmitting}
-          className={`flex items-center bg-gradient-to-r from-kweli-accent to-kweli-primary text-white font-medium py-2.5 px-6 rounded-lg shadow-soft hover:shadow-soft-md transition-all duration-300 transform hover:-translate-y-0.5 ${isSubmitting ? 'opacity-80' : ''}`}
+          disabled={isSubmitting || isSavingToBlockchain}
+          className={`flex items-center bg-gradient-to-r from-kweli-accent to-kweli-primary text-white font-medium py-2.5 px-6 rounded-lg shadow-soft hover:shadow-soft-md transition-all duration-300 transform hover:-translate-y-0.5 ${(isSubmitting || isSavingToBlockchain) ? 'opacity-80' : ''}`}
         >
-          {isSubmitting ? (
+          {isSubmitting || isSavingToBlockchain ? (
             <>
               <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              Processing...
+              {isSubmitting ? 'Processing...' : 'Saving to Blockchain...'}
             </>
           ) : (
             <>
