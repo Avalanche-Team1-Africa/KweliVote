@@ -178,16 +178,16 @@ export const voterAPI = {
     const biometricData = {};
     if (data.did) biometricData.did = data.did;
     if (data.biometric_template) biometricData.biometric_template = data.biometric_template;
+    if (data.blockchain_tx_id) biometricData.blockchain_tx_id = data.blockchain_tx_id;
+    if (data.blockchain_subnet_id) biometricData.blockchain_subnet_id = data.blockchain_subnet_id;
     
     // Remove biometric fields from main data
     const voterData = { ...data };
     delete voterData.did;
     delete voterData.biometric_template;
     delete voterData.has_template;
-    delete voterData.blockchain_tx_id;
-    delete voterData.blockchain_subnet_id;
     
-    // If both DID and biometric_template are present, the backend will handle saving them
+    // If biometric data is present, include it in the request
     return authenticatedRequest(`${API_BASE_URL}/voters/`, 'POST', {
       ...voterData,
       ...(biometricData.did && biometricData.biometric_template ? biometricData : {})
@@ -195,24 +195,62 @@ export const voterAPI = {
   },
   
   async updateVoter(id, data) {
-    // Extract any biometric data from the request
-    const biometricData = {};
-    if (data.did) biometricData.did = data.did;
-    if (data.biometric_template) biometricData.biometric_template = data.biometric_template;
-    
-    // Remove biometric fields from main data
-    const voterData = { ...data };
-    delete voterData.did;
-    delete voterData.biometric_template;
-    delete voterData.has_template;
-    delete voterData.blockchain_tx_id;
-    delete voterData.blockchain_subnet_id;
-    
-    // Update voter with non-biometric data and biometric data if available
-    return authenticatedRequest(`${API_BASE_URL}/voters/${id}/`, 'PUT', {
-      ...voterData,
-      ...(biometricData.did && biometricData.biometric_template ? biometricData : {})
-    });
+    try {
+      // First, get the current voter data if we're only updating specific fields
+      let completeVoterData = { ...data };
+
+      // Handle camelCase to snake_case conversion for these fields
+      if (data.designatedPollingStation) {
+        completeVoterData.designated_polling_station = data.designatedPollingStation;
+        delete completeVoterData.designatedPollingStation;
+      }
+
+      // Check if we're only updating specific fields like blockchain data
+      const requiredFields = ['nationalid', 'firstname', 'surname', 'designated_polling_station', 'created_by'];
+      const missingFields = requiredFields.filter(field => !completeVoterData[field]);
+
+      // If we're missing required fields, fetch the voter data first
+      if (missingFields.length > 0) {
+        console.log("Fetching complete voter data before update since required fields are missing");
+        const currentVoter = await this.getVoterById(id);
+        if (currentVoter) {
+          // Fill in any missing required fields from existing data
+          completeVoterData = {
+            ...currentVoter, // Start with all current data
+            ...completeVoterData, // Override with any new data provided
+            
+            // Ensure these required fields exist
+            nationalid: completeVoterData.nationalid || currentVoter.nationalid,
+            firstname: completeVoterData.firstname || currentVoter.firstname,
+            surname: completeVoterData.surname || currentVoter.surname,
+            designated_polling_station: completeVoterData.designated_polling_station || currentVoter.designated_polling_station,
+            created_by: completeVoterData.created_by || currentVoter.created_by
+          };
+        }
+      }
+      
+      // Extract any biometric data from the request
+      const biometricData = {};
+      if (completeVoterData.did) biometricData.did = completeVoterData.did;
+      if (completeVoterData.biometric_template) biometricData.biometric_template = completeVoterData.biometric_template;
+      if (completeVoterData.blockchain_tx_id) biometricData.blockchain_tx_id = completeVoterData.blockchain_tx_id;
+      if (completeVoterData.blockchain_subnet_id) biometricData.blockchain_subnet_id = completeVoterData.blockchain_subnet_id;
+      
+      // Remove biometric fields from main data
+      const voterData = { ...completeVoterData };
+      delete voterData.did;
+      delete voterData.biometric_template;
+      delete voterData.has_template;
+      
+      // Update voter with non-biometric data and biometric data if available
+      return authenticatedRequest(`${API_BASE_URL}/voters/${id}/`, 'PUT', {
+        ...voterData,
+        ...(biometricData.did && biometricData.biometric_template ? biometricData : {})
+      });
+    } catch (error) {
+      console.error("Error updating voter:", error);
+      throw error;
+    }
   },
   
   async deleteVoter(id) {

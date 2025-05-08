@@ -17,6 +17,14 @@ const VoterStep2 = ({ formData, prevStep, handleSubmit, isSubmitting = false, on
   const [blockchainAddress, setBlockchainAddress] = useState('');
   const [blockchainError, setBlockchainError] = useState('');
 
+  useEffect(() => {
+    // Debug log to check if environment variables are loaded
+    console.log('Environment variables check:');
+    console.log('REACT_APP_ADMIN_PRIVATE_KEY exists:', process.env.REACT_APP_ADMIN_PRIVATE_KEY ? 'Yes' : 'No');
+    console.log('Private key length:', process.env.REACT_APP_ADMIN_PRIVATE_KEY ? process.env.REACT_APP_ADMIN_PRIVATE_KEY.length : 0);
+    // Don't log the actual key for security reasons
+  }, []);
+
   const workflowSteps = [
     { id: 'fingerprint', label: 'Fingerprint' },
     { id: 'template', label: 'Template' },
@@ -147,6 +155,20 @@ const VoterStep2 = ({ formData, prevStep, handleSubmit, isSubmitting = false, on
               const address = `0x${didResult.publicKey.slice(-40)}`;
               setBlockchainAddress(address);
               
+              // For demo purposes, we use a development private key
+              // In production, this should be securely managed by an admin
+              // This is a test private key with no real funds - NEVER use this in production
+              const adminPrivateKey = process.env.REACT_APP_ADMIN_PRIVATE_KEY || 
+                'A7b9f6989ff480042ecfdb0f1aee605ec59a6b0937adf9264e4c6fbbfef295bc'; // Fallback key for development only
+              
+              console.log('Using private key for blockchain operation');
+
+              // Import the private key for signing
+              const importResult = blockchainService.importPrivateKey(adminPrivateKey);
+              if (!importResult.success) {
+                throw new Error(`Failed to import admin key: ${importResult.error}`);
+              }
+              
               // Save DID to blockchain
               return blockchainService.storeDID(voterId, didResult.didKey);
             } else {
@@ -160,17 +182,24 @@ const VoterStep2 = ({ formData, prevStep, handleSubmit, isSubmitting = false, on
                 blockNumber: result.blockNumber
               });
               
-              // Call the API to save biometric data
-              return apiServices.voter.saveBiometricData(voterId, {
-                ...biometricData,
-                blockchain_tx_id: result.transactionHash
+              // Get blockchain network information
+              const networkInfo = blockchainService.getNetworkInfo();
+              
+              // Update the voter record with the blockchain transaction ID and network name
+              return apiServices.voter.updateVoter(voterId, {
+                blockchain_tx_id: result.transactionHash,
+                blockchain_subnet_id: networkInfo.name || 'Avalanche C-Chain'
               });
             } else {
               throw new Error(result.error || 'Failed to store DID on blockchain');
             }
           })
+          .then(() => {
+            // After updating the blockchain_tx_id, save biometric data
+            return apiServices.voter.saveBiometricData(voterId, biometricData);
+          })
           .then(response => {
-            console.log('Biometric data saved successfully:', response);
+            console.log('Data saved successfully:', response);
             // Show success modal with all required information
             setShowSuccessMessage(true);
             setIsSavingToBlockchain(false);

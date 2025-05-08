@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import VoterStep1 from './VoterStep1';
 import VoterStep2 from './VoterStep2';
 import { voterAPI } from '../../utils/api';
@@ -30,6 +30,9 @@ const VoterRegister = () => {
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingVoterId, setEditingVoterId] = useState(null);
+  
+  // Add instance counter to force component remount after submission
+  const [instanceKey, setInstanceKey] = useState(0);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -116,6 +119,41 @@ const VoterRegister = () => {
     }
   };
   
+  // Add useEffect to auto-redirect to step 1 after successful save
+  useEffect(() => {
+    let redirectTimer;
+    
+    if (showSuccess && !isEditMode) {
+      // Set a timer to automatically redirect to step 1 after showing success message
+      redirectTimer = setTimeout(() => {
+        // Reset form data for next voter
+        setFormData({
+          nationalid: '',
+          firstname: '',
+          middlename: '',
+          surname: '',
+          designatedPollingStation: '',
+          biometricData: null,
+          biometricImage: null,
+        });
+        
+        // Navigate to step 1
+        setCurrentStep(1);
+        
+        // Increment instance key to ensure fresh fingerprint component when they get back to step 2
+        setInstanceKey(prevKey => prevKey + 1);
+        
+        // Clear success message
+        setShowSuccess(false);
+      }, 2000); // 2 seconds delay to ensure user sees the success message
+    }
+    
+    // Cleanup timer if component unmounts
+    return () => {
+      if (redirectTimer) clearTimeout(redirectTimer);
+    };
+  }, [showSuccess, isEditMode]);
+
   const handleFormSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -148,7 +186,7 @@ const VoterRegister = () => {
           // Transform fields to match API expectations
           designated_polling_station: formData.designatedPollingStation,
           created_by: sessionStorage.getItem('userInfo') 
-            ? JSON.parse(sessionStorage.getItem('userInfo')).user?.username || 'anonymous' 
+            ? JSON.parse(sessionStorage.getItem('userInfo')).username || 'anonymous' 
             : 'anonymous',
           // Include biometric data if available from biometric step
           ...(formData.biometricData?.did && formData.biometricData?.biometric_template ? {
@@ -166,7 +204,7 @@ const VoterRegister = () => {
           // Transform fields to match API expectations
           designated_polling_station: formData.designatedPollingStation,
           created_by: sessionStorage.getItem('userInfo') 
-            ? JSON.parse(sessionStorage.getItem('userInfo')).user?.username || 'anonymous' 
+            ? JSON.parse(sessionStorage.getItem('userInfo')).username || 'anonymous' 
             : 'anonymous',
           // Include biometric data if available from biometric step
           ...(formData.biometricData?.did && formData.biometricData?.biometric_template ? {
@@ -182,19 +220,9 @@ const VoterRegister = () => {
         setShowSuccess(true);
       }
       
-      // Reset the form if not in edit mode
-      if (!isEditMode) {
-        setFormData({
-          nationalid: '',
-          firstname: '',
-          middlename: '',
-          surname: '',
-          designatedPollingStation: '',
-          biometricData: null,
-          biometricImage: null,
-        });
-        setCurrentStep(1);
-      }
+      // NOTE: The auto-redirect to step 1 with cleared data will happen
+      // via the useEffect added above, so we're removing the manual reset here
+      
     } catch (err) {
       console.error('Error saving voter:', err);
       setError(err.message || 'An error occurred while saving the voter record');
@@ -369,6 +397,7 @@ const VoterRegister = () => {
         )}
         {currentStep === 2 && (
           <VoterStep2
+            key={`voter-step2-${instanceKey}`}
             formData={formData}
             handleFileChange={handleFileChange}
             prevStep={prevStep}

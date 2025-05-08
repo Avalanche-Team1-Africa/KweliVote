@@ -68,8 +68,19 @@ class BlockchainService {
    */
   importPrivateKey(privateKey) {
     try {
+      // Validate the private key
+      if (!privateKey || typeof privateKey !== 'string' || privateKey.trim() === '') {
+        return {
+          success: false,
+          error: 'Private key cannot be empty'
+        };
+      }
+
+      // Make sure it starts with 0x if it doesn't already
+      const formattedKey = privateKey.startsWith('0x') ? privateKey : `0x${privateKey}`;
+      
       // Create wallet from private key
-      const wallet = new ethers.Wallet(privateKey, this.provider);
+      const wallet = new ethers.Wallet(formattedKey, this.provider);
       this.signer = wallet;
       
       return {

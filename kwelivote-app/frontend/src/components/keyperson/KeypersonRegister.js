@@ -235,7 +235,7 @@ const KeypersonRegister = () => {
           political_party: formData.politicalParty,
           observer_type: formData.observerType,
           created_by: sessionStorage.getItem('userInfo') 
-            ? JSON.parse(sessionStorage.getItem('userInfo')).user?.username || 'anonymous' 
+            ? JSON.parse(sessionStorage.getItem('userInfo')).username || 'anonymous' 
             : 'anonymous'
         };
         
@@ -260,7 +260,7 @@ const KeypersonRegister = () => {
             political_party: formData.politicalParty,
             observer_type: formData.observerType,
             created_by: sessionStorage.getItem('userInfo') 
-              ? JSON.parse(sessionStorage.getItem('userInfo')).user?.username || 'anonymous' 
+              ? JSON.parse(sessionStorage.getItem('userInfo')).username || 'anonymous' 
               : 'anonymous'
           };
           
@@ -283,7 +283,7 @@ const KeypersonRegister = () => {
             political_party: formData.politicalParty,
             observer_type: formData.observerType,
             created_by: sessionStorage.getItem('userInfo') 
-              ? JSON.parse(sessionStorage.getItem('userInfo')).user?.username || 'anonymous' 
+              ? JSON.parse(sessionStorage.getItem('userInfo')).username || 'anonymous' 
               : 'anonymous'
           };
           

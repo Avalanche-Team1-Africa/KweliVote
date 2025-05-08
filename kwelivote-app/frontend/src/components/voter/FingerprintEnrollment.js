@@ -48,6 +48,8 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete }) => {
 
   // Initialize SDK only once when the component mounts
   useEffect(() => {
+    console.log('FingerprintEnrollment component mounted with ID:', nationalId);
+    
     if (typeof window === 'undefined' || !window.Fingerprint) {
       setError('Fingerprint SDK WebApi not available. Please check script loading.');
       return;
@@ -59,11 +61,37 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete }) => {
     try {
       console.log(`Initializing Fingerprint SDK WebApi with client URL: ${clientURI}`);
       
+      // First, attempt to disconnect any lingering connections by creating and disposing a temporary instance
+      if (window.Fingerprint && window.tempSdkCleanup) {
+        try {
+          console.log('Removing any lingering connections before initializing new one');
+          window.tempSdkCleanup();
+          window.tempSdkCleanup = null;
+        } catch (cleanupErr) {
+          console.warn('Error during connection cleanup:', cleanupErr);
+        }
+      }
+      
       // Create WebApi instance with client mode enabled
       sdkRef.current = new window.Fingerprint.WebApi({
         useClient: true,
         clientURI: clientURI
       });
+      
+      // Store a cleanup function globally so it can be called before next initialization
+      window.tempSdkCleanup = () => {
+        if (sdkRef.current) {
+          try {
+            removeEventHandlers();
+            if (sdkRef.current.stopAcquisition) {
+              sdkRef.current.stopAcquisition();
+            }
+          } catch (err) {
+            console.error("Error during global cleanup:", err);
+          }
+          sdkRef.current = null;
+        }
+      };
       
       // Set up event handlers for WebApi
       setupEventHandlers();
@@ -77,6 +105,7 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete }) => {
     
     // Cleanup when component unmounts
     return () => {
+      console.log('FingerprintEnrollment component unmounting, cleaning up connections');
       if (sdkRef.current) {
         if (isScanning) {
           try {
@@ -88,6 +117,7 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete }) => {
         
         // Remove event handlers
         removeEventHandlers();
+        sdkRef.current = null;
       }
     };
   }, [nationalId]);
@@ -335,25 +365,58 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete }) => {
       let samples;
       
       try {
+        // Validate that sampleData and samples exist
+        if (!sampleData) {
+          throw new Error("No sample data received");
+        }
+        
+        // Handle potentially empty samples
+        if (sampleData.samples === "" || sampleData.samples === null || sampleData.samples === undefined) {
+          console.warn("Empty samples data received, using default placeholder");
+          samples = [];  // Set a default empty array to prevent parsing errors
+        } 
         // Parse samples if it's a string
-        if (typeof sampleData.samples === 'string') {
-          samples = JSON.parse(sampleData.samples);
+        else if (typeof sampleData.samples === 'string') {
+          // Ensure the string is not empty before parsing
+          if (sampleData.samples.trim() === "") {
+            samples = [];
+          } else {
+            try {
+              samples = JSON.parse(sampleData.samples);
+            } catch (jsonError) {
+              console.error("JSON parse error:", jsonError);
+              // If parsing fails, use a safe default
+              samples = [];
+            }
+          }
         } else {
           samples = sampleData.samples;
         }
+        
         console.log("Parsed samples:", samples);
         
+        // Ensure samples is an array before proceeding
+        if (!Array.isArray(samples)) {
+          console.warn("Samples is not an array, converting to array format");
+          samples = samples ? [samples] : [];
+        }
+        
         // Handle PngImage format (most reliable with many readers)
-        if (sampleData.sampleFormat === window.Fingerprint.SampleFormat.PngImage && Array.isArray(samples)) {
-          extractedSample = window.Fingerprint.b64UrlTo64(samples[0]);
+        if (sampleData.sampleFormat === window.Fingerprint.SampleFormat.PngImage && samples.length > 0) {
+          try {
+            extractedSample = window.Fingerprint.b64UrlTo64(samples[0]);
+          } catch (conversionErr) {
+            console.error("Error converting sample:", conversionErr);
+            extractedSample = JSON.stringify(samples);
+          }
         } else {
           // Fallback to raw data
           extractedSample = JSON.stringify(samples);
         }
       } catch (parseErr) {
         console.error("Error parsing sample data:", parseErr);
-        // Use raw sample data as fallback
-        extractedSample = JSON.stringify(sampleData.samples);
+        // Use a safe fallback that won't cause further errors
+        extractedSample = JSON.stringify({ error: "Failed to parse samples", message: parseErr.message });
       }
       
       // Calculate the correct scan index based on the current length of the fingerprints array
@@ -423,14 +486,16 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete }) => {
   }, [scanCount, isScanning, showGenerateButton]);
   
   // Reset the enrollment process
-  const resetEnrollment = () => {
-    stopCapture();
+  const resetEnrollment = async () => {
+    // First stop any ongoing scanning
+    await stopCapture();
     
+    // Reset all state variables
     setScanCount(0);
     setFingerprintTemplate(null);
     setShowGenerateButton(false);
     setError('');
-    setMessage('Ready to start enrollment');
+    setMessage('Reinitializing connection...');
     
     // Keep reader info but reset fingerprints
     const readerInfo = bioDataRef.current.readerInfo;
@@ -445,6 +510,32 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete }) => {
         description: "Finger Minutiae Record Format"
       }
     };
+    
+    // Important: Reinitialize the connection by removing and re-establishing event handlers
+    try {
+      // Remove existing event handlers
+      removeEventHandlers();
+      
+      // Reset client connection status
+      setClientConnectionStatus('disconnected');
+      setSelectedReader('');
+      setReaders([]);
+      
+      // Wait a moment to ensure everything is cleared
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Re-set up event handlers
+      setupEventHandlers();
+      
+      // Rediscover readers to reconnect
+      setMessage('Rediscovering fingerprint readers...');
+      await discoverReaders();
+      
+      setMessage('Connection reset. Ready to start new enrollment.');
+    } catch (err) {
+      console.error("Error resetting fingerprint connection:", err);
+      setError(`Failed to reset connection: ${err.message || 'Unknown error'}`);
+    }
   };
   
   // Handle generate template and DID button click
