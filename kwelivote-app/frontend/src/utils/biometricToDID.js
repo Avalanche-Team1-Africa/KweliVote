@@ -78,6 +78,28 @@ export const extractTemplate = (fingerprintTemplate) => {
 };
 
 /**
+ * Generate Voter DID directly from ISO template
+ * 
+ * For voters, we directly apply SHA-256 to the ISO template to create the DID,
+ * without generating cryptographic keys.
+ * 
+ * @param {Uint8Array} templateData - The ISO template binary data
+ * @returns {string} The DID in did:sha-256: format
+ */
+export const generateVoterDID = (templateData) => {
+  console.log("Generating voter DID directly from ISO template");
+  
+  // Hash the template data with SHA-256
+  const hashedTemplate = sha256(templateData);
+  
+  // Convert to hex string
+  const didValue = bytesToHex(hashedTemplate);
+  
+  // Return the DID in a format that indicates it's a direct hash
+  return `did:sha-256:${didValue}`;
+};
+
+/**
  * STEP 2: Generate Stable Secret Key
  * 
  * This function directly uses the deterministic ISO template data to create a
@@ -173,41 +195,123 @@ export const generateDIDKey = (publicKey) => {
 /**
  * Complete Biometric to DID Conversion Process
  * 
- * This function implements the simplified workflow:
- * ISO Template → Secret Key → Hash → Key Pair → DID:key
+ * This function implements different workflows for voters and key persons:
+ * - Voters: ISO Template → SHA-256 Hash → DID
+ * - Key Persons: ISO Template → Secret Key → Hash → Key Pair → DID:key
  * 
  * @param {Object} fingerprintTemplate - The fingerprint template object
- * @returns {Object} Contains DID, private key, and public key
+ * @param {String} nationalId - The national ID of the person
+ * @param {Boolean} isKeyPerson - Whether this is for a key person (optional)
+ * @returns {Object} Contains DID (and key information for key persons)
  */
-export const biometricToDID = (fingerprintTemplate) => {
+export const biometricToDID = (fingerprintTemplate, nationalId, isKeyPerson = false) => {
   console.log("Starting biometric to DID conversion process...");
   
   // Step 1: Extract template features
   const templateData = extractTemplate(fingerprintTemplate);
+
+  let result;
   
-  // Step 2: Generate stable secret key directly from ISO template
-  // (Skip stabilization as it's handled by backend)
-  const stableSecret = generateStableSecretKey(templateData);
-  
-  // Step 3: Hash the stable secret
-  const hashedSecret = hashStableSecret(stableSecret);
-  
-  // Step 4: Derive cryptographic key pair
-  const { privateKey, publicKey } = deriveKeyPair(hashedSecret);
-  
-  // Step 5: Generate DID:key
-  const didKey = generateDIDKey(publicKey);
-  
-  // Convert binary keys to hex strings for storage and display
-  const result = {
-    didKey,
-    privateKey: bytesToHex(privateKey),
-    publicKey: bytesToHex(publicKey)
-  };
+  if (isKeyPerson) {
+    // For key persons, follow the full key generation process
+    console.log("Processing as key person - generating cryptographic keys");
+    
+    // Step 2: Generate stable secret key directly from ISO template
+    const stableSecret = generateStableSecretKey(templateData);
+    
+    // Step 3: Hash the stable secret
+    const hashedSecret = hashStableSecret(stableSecret);
+    
+    // Step 4: Derive cryptographic key pair
+    const { privateKey, publicKey } = deriveKeyPair(hashedSecret);
+    
+    // Step 5: Generate DID:key
+    const didKey = generateDIDKey(publicKey);
+    
+    // Convert binary keys to hex strings for storage and display
+    result = {
+      didKey,
+      privateKey: bytesToHex(privateKey),
+      publicKey: bytesToHex(publicKey)
+    };
+    
+    // Store the DID keys in localStorage ONLY for key persons
+    try {
+      // Retrieve existing data or create new array if not present
+      let didKeysData = JSON.parse(localStorage.getItem('testDIDKeys')) || [];
+      
+      // Check if an entry with the same nationalId already exists
+      const existingIndex = didKeysData.findIndex(entry => entry.nationalId === nationalId);
+      
+      const didEntry = {
+        nationalId,
+        didKey,
+        publicKey: bytesToHex(publicKey),
+        privateKey: bytesToHex(privateKey)
+      };
+      
+      if (existingIndex !== -1) {
+        // Replace existing entry
+        didKeysData[existingIndex] = didEntry;
+      } else {
+        // Add new entry
+        didKeysData.push(didEntry);
+      }
+      
+      // Save updated data back to localStorage
+      localStorage.setItem('testDIDKeys', JSON.stringify(didKeysData));
+      
+      console.log(`DID keys for key person with national ID ${nationalId} saved to localStorage`);
+    } catch (error) {
+      console.error("Error saving DID keys to localStorage:", error);
+      // Don't throw error as we don't want to interrupt the main process
+    }
+  } else {
+    // For voters, directly generate a DID from the ISO template using SHA-256
+    console.log("Processing as voter - generating simplified direct DID");
+    const didKey = generateVoterDID(templateData);
+    
+    // For voters, only include the DID in the result
+    result = { didKey };
+  }
   
   console.log("✅ Biometric to DID conversion completed successfully");
   
   return result;
+};
+
+/**
+ * Verify a Voter DID against a fingerprint template
+ * 
+ * Used for voter validation. Re-generates the DID from a fresh fingerprint scan
+ * and compares it to the blockchain DID.
+ * 
+ * @param {Object} fingerprintTemplate - The fingerprint template from a fresh scan
+ * @param {String} blockchainDID - The DID stored on the blockchain
+ * @returns {Boolean} Whether the DIDs match
+ */
+export const verifyVoterDID = (fingerprintTemplate, blockchainDID) => {
+  console.log("Verifying voter identity through DID comparison");
+  
+  try {
+    // Extract template features
+    const templateData = extractTemplate(fingerprintTemplate);
+    
+    // Generate a new DID from the template data
+    const generatedDID = generateVoterDID(templateData);
+    
+    // Compare the generated DID with the one stored on the blockchain
+    const isMatch = generatedDID === blockchainDID;
+    
+    console.log(`DID verification result: ${isMatch ? 'Match' : 'No match'}`);
+    console.log(`Generated: ${generatedDID}`);
+    console.log(`Expected: ${blockchainDID}`);
+    
+    return isMatch;
+  } catch (error) {
+    console.error("Error during DID verification:", error);
+    return false;
+  }
 };
 
 export default biometricToDID;

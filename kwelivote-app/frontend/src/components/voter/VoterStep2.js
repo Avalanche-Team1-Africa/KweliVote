@@ -145,9 +145,10 @@ const VoterStep2 = ({ formData, prevStep, handleSubmit, isSubmitting = false, on
           // Initialize blockchain service
           blockchainService.initialize().then(isInitialized => {
             if (isInitialized) {
-              // Extract blockchain address from public key
-              // This is a simple approach - in a production app, this would be more robust
-              const address = `0x${didResult.publicKey.slice(-40)}`;
+              // For voters, we now use a derived address from the DID itself
+              // since we don't generate public/private keys for voters anymore
+              const didHash = didResult.didKey.substring(didResult.didKey.lastIndexOf(':') + 1);
+              const address = `0x${didHash.substring(0, 40)}`;
               setBlockchainAddress(address);
               
               // For demo purposes, we use a development private key

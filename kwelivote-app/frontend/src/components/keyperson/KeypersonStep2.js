@@ -89,25 +89,21 @@ const KeypersonStep2 = ({ formData, nextStep, prevStep, isObserver, onEnrollment
             setCurrentStep('template');
             setConversionLog(prevLogs => [...prevLogs, "STEP 1: Extracting ISO template"]);
           }
-          else if (message.includes("STEP 2") || message.includes("biometric stabilization")) {
-            setCurrentStep('stabilization');
-            setConversionLog(prevLogs => [...prevLogs, "STEP 2: Applying biometric stabilization"]);
-          }
-          else if (message.includes("STEP 3") || message.includes("stable secret key")) {
+          else if (message.includes("STEP 2") || message.includes("Generating stable secret key")) {
             setCurrentStep('secretKey');
-            setConversionLog(prevLogs => [...prevLogs, "STEP 3: Generating stable secret key"]);
+            setConversionLog(prevLogs => [...prevLogs, "STEP 2: Generating stable secret key"]);
           }
-          else if (message.includes("STEP 4") || message.includes("hash") || message.includes("SHA-256")) {
+          else if (message.includes("STEP 3") || message.includes("hash") || message.includes("SHA-256")) {
             setCurrentStep('hash');
-            setConversionLog(prevLogs => [...prevLogs, "STEP 4: Creating cryptographic hash"]);
+            setConversionLog(prevLogs => [...prevLogs, "STEP 3: Creating cryptographic hash"]);
           }
-          else if (message.includes("STEP 5") || message.includes("Deriving") || message.includes("key pair")) {
+          else if (message.includes("STEP 4") || message.includes("Deriving") || message.includes("key pair")) {
             setCurrentStep('keyPair');
-            setConversionLog(prevLogs => [...prevLogs, "STEP 5: Generating cryptographic keypair"]);
+            setConversionLog(prevLogs => [...prevLogs, "STEP 4: Generating cryptographic keypair"]);
           }
-          else if (message.includes("STEP 7") || message.includes("DID:key") || message.includes("Generating DID")) {
+          else if (message.includes("STEP 6") || message.includes("DID:key") || message.includes("Generating DID")) {
             setCurrentStep('did');
-            setConversionLog(prevLogs => [...prevLogs, "STEP 7: Creating DID from public key"]);
+            setConversionLog(prevLogs => [...prevLogs, "STEP 6: Creating DID from public key"]);
           }
           else if (message.includes("Starting biometric") || message.includes("✅") || message.includes("completed successfully")) {
             setConversionLog(prevLogs => [...prevLogs, message]);
@@ -118,7 +114,7 @@ const KeypersonStep2 = ({ formData, nextStep, prevStep, isObserver, onEnrollment
       // Force a small delay to ensure UI can show the initial step before proceeding
       setTimeout(() => {
         try {
-          const result = biometricToDID(fingerprintTemplate, formData.nationalid);
+          const result = biometricToDID(fingerprintTemplate, formData.nationalid, true); // Pass true to indicate this is a key person
           setDidResult(result);
           
           // Force the last step to be marked as complete

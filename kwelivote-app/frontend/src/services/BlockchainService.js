@@ -248,6 +248,74 @@ class BlockchainService {
   }
 
   /**
+   * Verify a voter's DID using their fingerprint
+   * @param {string} nationalId - The voter's national ID
+   * @param {object} fingerprintTemplate - The fingerprint template from a fresh scan
+   * @returns {Object} Verification result
+   */
+  async verifyVoterDIDWithFingerprint(nationalId, fingerprintTemplate) {
+    if (!this.isInitialized) {
+      return { 
+        success: false,
+        error: 'Blockchain not initialized' 
+      };
+    }
+
+    if (!this.voterDIDContractAddress) {
+      return { 
+        success: false,
+        error: 'VoterDID contract not deployed' 
+      };
+    }
+
+    try {
+      // Import the verifyVoterDID function dynamically to avoid circular dependencies
+      const { verifyVoterDID } = await import('../utils/biometricToDID');
+      
+      // Create a read-only contract instance
+      const { abi } = VoterDIDArtifact;
+      const contract = new ethers.Contract(
+        this.voterDIDContractAddress,
+        abi,
+        this.provider
+      );
+      
+      // Get the stored DID for the national ID
+      const storedDID = await contract.getDID(nationalId);
+      
+      // Check if a DID exists on the blockchain
+      if (!storedDID || storedDID.length === 0) {
+        return {
+          success: true,
+          isVerified: false,
+          nationalId,
+          did: null,
+          message: 'No identity found for this voter'
+        };
+      }
+
+      // Verify the fingerprint against the stored DID
+      const isMatch = verifyVoterDID(fingerprintTemplate, storedDID);
+      
+      return {
+        success: true,
+        isVerified: isMatch,
+        nationalId,
+        did: storedDID,
+        message: isMatch 
+          ? 'Voter identity verified with fingerprint match' 
+          : 'Fingerprint does not match stored identity'
+      };
+    } catch (error) {
+      console.error('Failed to verify voter DID with fingerprint:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
    * Setup blockchain infrastructure
    * @param {Object} config - Configuration for blockchain setup
    * @returns {Object} Setup result information
