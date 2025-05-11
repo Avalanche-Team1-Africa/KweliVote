@@ -231,11 +231,89 @@ class BlockchainService {
       // Check if the DID exists
       const isVerified = storedDID && storedDID.length > 0;
       
+      let transactionInfo = null;
+      
+      // If verified, make a thorough attempt to get transaction information
+      if (isVerified) {
+        try {
+          // First approach: Look for DIDRegistered events related to this national ID
+          const registerFilter = contract.filters.DIDRegistered(nationalId);
+          const registerEvents = await contract.queryFilter(registerFilter);
+          
+          if (registerEvents.length > 0) {
+            // Sort by block number (descending) to get the most recent
+            registerEvents.sort((a, b) => b.blockNumber - a.blockNumber);
+            
+            // Get the most recent event
+            const latestEvent = registerEvents[0];
+            
+            // Get transaction info and block details
+            const tx = await this.provider.getTransaction(latestEvent.transactionHash);
+            const receipt = await this.provider.getTransactionReceipt(latestEvent.transactionHash);
+            const block = await this.provider.getBlock(latestEvent.blockNumber);
+            
+            transactionInfo = {
+              hash: latestEvent.transactionHash,
+              blockNumber: latestEvent.blockNumber,
+              timestamp: block.timestamp ? new Date(block.timestamp * 1000).toISOString() : null,
+              confirmations: tx.confirmations,
+              from: receipt.from,
+              eventName: 'DIDRegistered'
+            };
+          } else {
+            // Second approach: If no specific events found, check contract transactions with this address
+            console.log('No DIDRegistered events found, searching contract transactions');
+            
+            // Get the most recent block with transactions to this contract
+            const blockHeight = await this.provider.getBlockNumber();
+            const lookbackBlocks = 10000; // Look back through the last 10,000 blocks
+            const startBlock = Math.max(0, blockHeight - lookbackBlocks);
+            
+            // Query for all contract events in this range
+            const allEvents = await contract.queryFilter('*', startBlock, blockHeight);
+            
+            for (const event of allEvents) {
+              try {
+                // For each event, get the transaction
+                const tx = await this.provider.getTransaction(event.transactionHash);
+                if (tx && tx.to && tx.to.toLowerCase() === this.voterDIDContractAddress.toLowerCase()) {
+                  const callData = tx.data;
+                  
+                  // Check if this transaction might be related to this national ID
+                  // This is a simplification and might not work for all contract implementations
+                  if (callData && callData.includes(nationalId.replace(/0x/g, ''))) {
+                    const receipt = await this.provider.getTransactionReceipt(event.transactionHash);
+                    const block = await this.provider.getBlock(event.blockNumber);
+                    
+                    transactionInfo = {
+                      hash: event.transactionHash,
+                      blockNumber: event.blockNumber,
+                      timestamp: block.timestamp ? new Date(block.timestamp * 1000).toISOString() : null,
+                      confirmations: tx.confirmations,
+                      from: receipt.from,
+                      eventName: 'ContractInteraction'
+                    };
+                    break; // Use the first matching transaction
+                  }
+                }
+              } catch (innerError) {
+                console.warn('Error processing transaction:', innerError);
+                // Continue to the next transaction
+              }
+            }
+          }
+        } catch (eventError) {
+          console.warn('Could not fetch transaction events:', eventError);
+          // Continue without transaction info
+        }
+      }
+      
       return {
         success: true,
         isVerified,
         nationalId,
         did: storedDID,
+        transactionInfo,
         message: isVerified ? 'Voter identity verified on blockchain' : 'No identity found for this voter'
       };
     } catch (error) {

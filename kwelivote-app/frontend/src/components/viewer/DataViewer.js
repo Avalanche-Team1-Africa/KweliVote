@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { voterAPI, keypersonAPI } from '../../utils/api';
+import blockchainService from '../../services/BlockchainService';
 
 const DataViewer = () => {
   const [activeTab, setActiveTab] = useState('voters');
@@ -8,8 +9,27 @@ const DataViewer = () => {
   const [keypersons, setKeypersons] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  // Add states for blockchain validation
+  const [validatingVoter, setValidatingVoter] = useState(null);
+  const [validationResult, setValidationResult] = useState(null);
+  const [isBlockchainConnected, setIsBlockchainConnected] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
   
-  // Fetch data when component mounts
+  // Initialize blockchain connection when component mounts
+  useEffect(() => {
+    const initBlockchain = async () => {
+      try {
+        const initialized = await blockchainService.initialize();
+        setIsBlockchainConnected(initialized);
+      } catch (err) {
+        console.error('Error initializing blockchain connection:', err);
+      }
+    };
+    
+    initBlockchain();
+  }, []);
+  
+  // Fetch data when component mounts or tab changes
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
@@ -33,6 +53,34 @@ const DataViewer = () => {
     
     fetchData();
   }, [activeTab]); // Re-fetch when tab changes
+
+  // Handle blockchain verification of voter DID
+  const handleVerifyVoterDID = async (voter) => {
+    if (!isBlockchainConnected) {
+      setError('Blockchain is not connected. Unable to verify voter.');
+      return;
+    }
+    
+    setValidatingVoter(voter);
+    setValidationResult(null);
+    setIsValidating(true);
+    
+    try {
+      const result = await blockchainService.verifyVoterDID(voter.nationalid || voter.national_id);
+      setValidationResult(result);
+    } catch (err) {
+      console.error('Error verifying voter DID:', err);
+      setError(`Failed to verify voter: ${err.message}`);
+    } finally {
+      setIsValidating(false);
+    }
+  };
+  
+  // Clear validation states
+  const handleCloseValidation = () => {
+    setValidatingVoter(null);
+    setValidationResult(null);
+  };
 
   const filteredVoters = voters.filter(voter => {
     if (!voter) return false;
@@ -161,7 +209,7 @@ const DataViewer = () => {
                                   Polling Station
                                 </th>
                                 <th scope="col" className="px-6 py-3.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                                  Created By
+                                  Actions
                                 </th>
                               </tr>
                             </thead>
@@ -175,7 +223,7 @@ const DataViewer = () => {
                                     {`${voter.firstname || voter.first_name || ''} ${(voter.middlename || voter.middle_name) ? (voter.middlename || voter.middle_name) + ' ' : ''}${voter.surname || voter.last_name || ''}`}
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-mono">
-                                    {voter.did || '—'}
+                                    {voter.did ? `${voter.did.substring(0, 12)}...` : '—'}
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                                     <span className="px-2 py-1 text-xs font-medium bg-blue-50 text-blue-700 rounded-full">
@@ -183,7 +231,12 @@ const DataViewer = () => {
                                     </span>
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                                    {voter.created_by || '—'}
+                                    <button
+                                      onClick={() => handleVerifyVoterDID(voter)}
+                                      className="px-4 py-2 text-xs font-medium text-white bg-kweli-primary rounded-lg shadow-soft hover:bg-kweli-secondary transition-all duration-200"
+                                    >
+                                      Validate
+                                    </button>
                                   </td>
                                 </tr>
                               ))}
@@ -284,6 +337,146 @@ const DataViewer = () => {
           )}
         </div>
       </div>
+
+      {validatingVoter && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-bold text-kweli-dark mb-4">Blockchain DID Validation</h3>
+            {isValidating ? (
+              <div className="flex flex-col items-center justify-center py-10">
+                <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-kweli-primary mb-4"></div>
+                <p className="text-sm text-gray-600">Validating voter identity on blockchain...</p>
+              </div>
+            ) : validationResult ? (
+              <div>
+                <div className="mb-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-md font-medium text-gray-800">Validation Status:</h4>
+                    {validationResult.isVerified ? (
+                      <div className="flex items-center text-green-600">
+                        <svg className="h-6 w-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <span className="font-medium">Verified</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center text-red-600">
+                        <svg className="h-6 w-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <span className="font-medium">Not Verified</span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                    <h5 className="text-sm font-medium text-gray-600 mb-2">National ID:</h5>
+                    <p className="text-sm font-mono bg-white p-2 rounded border border-gray-200">
+                      {validatingVoter.nationalid || validatingVoter.national_id}
+                    </p>
+                  </div>
+
+                  <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                    <h5 className="text-sm font-medium text-gray-600 mb-2">Database DID:</h5>
+                    <p className="text-sm font-mono bg-white p-2 rounded border border-gray-200 break-all">
+                      {validatingVoter.did || 'No DID stored in database'}
+                    </p>
+                  </div>
+
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h5 className="text-sm font-medium text-gray-600 mb-2">Blockchain DID:</h5>
+                    <p className="text-sm font-mono bg-white p-2 rounded border border-gray-200 break-all">
+                      {validationResult.did ? (
+                        <>
+                          {validationResult.did}
+                          
+                          {/* Always display transaction section when DID is verified */}
+                          <div className="mt-3 pt-2 border-t border-gray-200">
+                            <h6 className="text-xs font-medium text-gray-500 mb-2">Transaction Details:</h6>
+                            
+                            {validationResult.transactionInfo ? (
+                              <>
+                                <p className="text-xs mb-1">
+                                  <span className="font-semibold">Event:</span> {validationResult.transactionInfo.eventName}
+                                </p>
+                                {validationResult.transactionInfo.timestamp && (
+                                  <p className="text-xs mb-1">
+                                    <span className="font-semibold">Time:</span> {new Date(validationResult.transactionInfo.timestamp).toLocaleString()}
+                                  </p>
+                                )}
+                                <p className="text-xs mb-2">
+                                  <span className="font-semibold">Transaction Hash:</span> 
+                                  <span className="font-mono text-xs break-all">
+                                    {validationResult.transactionInfo.hash.substring(0, 10)}...{validationResult.transactionInfo.hash.substring(validationResult.transactionInfo.hash.length - 8)}
+                                  </span>
+                                </p>
+                                <a 
+                                  href={`https://testnet.avascan.info/blockchain/c/tx/${validationResult.transactionInfo.hash}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center px-3 py-1.5 bg-kweli-primary text-white text-sm font-medium rounded-md hover:bg-kweli-secondary transition-colors duration-200"
+                                  title="View transaction on Avalanche Explorer"
+                                >
+                                  <svg className="mr-1.5 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                  </svg>
+                                  View Transaction on Avascan
+                                </a>
+                              </>
+                            ) : (
+                              // When DID is verified but transaction info not available,
+                              // still provide a link to view the contract with DID information
+                              <div className="flex flex-col">
+                                <p className="text-xs mb-2 text-amber-600">
+                                  DID verified on blockchain but transaction details could not be found.
+                                </p>
+                                <p className="text-xs mb-3">
+                                  You can still view this record on the blockchain explorer.
+                                </p>
+                                <a 
+                                  href={`https://testnet.avascan.info/blockchain/c/address/${blockchainService.voterDIDContractAddress}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center px-3 py-1.5 bg-kweli-primary text-white text-sm font-medium rounded-md hover:bg-kweli-secondary transition-colors duration-200"
+                                  title="View contract on Avalanche Explorer"
+                                >
+                                  <svg className="mr-1.5 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                  </svg>
+                                  View Contract on Avascan
+                                </a>
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      ) : 'No DID found on blockchain'}
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex justify-center">
+                  <button
+                    onClick={handleCloseValidation}
+                    className="px-5 py-2 text-sm font-medium text-white bg-kweli-primary rounded-lg shadow-soft hover:bg-kweli-secondary transition-all duration-200"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center">
+                <p className="text-sm text-gray-700 mb-4">No validation result available.</p>
+                <button
+                  onClick={handleCloseValidation}
+                  className="px-4 py-2 text-sm font-medium text-white bg-kweli-primary rounded-lg shadow-soft hover:bg-kweli-secondary transition-all duration-200"
+                >
+                  Close
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

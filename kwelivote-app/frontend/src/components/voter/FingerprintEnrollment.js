@@ -565,6 +565,23 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete }) => {
         fingerprints: transformedFingerprints
       };
       
+      // // Add download functionality - allow user to download the template data as JSON file
+      // const downloadTemplateData = () => {
+      //   const dataStr = JSON.stringify(templateData, null, 2);
+      //   const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+        
+      //   const exportFileDefaultName = `fingerprint-template-${bioDataRef.current.userId || 'user'}-${new Date().toISOString().slice(0,10)}.json`;
+        
+      //   const linkElement = document.createElement('a');
+      //   linkElement.setAttribute('href', dataUri);
+      //   linkElement.setAttribute('download', exportFileDefaultName);
+      //   linkElement.click();
+      //   linkElement.remove();
+      // };
+      
+      // // Create and trigger download dialog
+      // downloadTemplateData();
+      
       // Log the template being sent to the API
       console.log('Sending fingerprint data to backend API:', templateData);
       
