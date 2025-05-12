@@ -123,37 +123,107 @@ const VoterRegister = () => {
   useEffect(() => {
     let redirectTimer;
     
-    if (showSuccess && !isEditMode) {
-      // Set a timer to automatically redirect to step 1 after showing success message
-      redirectTimer = setTimeout(() => {
-        // Reset form data for next voter
-        setFormData({
-          nationalid: '',
-          firstname: '',
-          middlename: '',
-          surname: '',
-          designatedPollingStation: '',
-          biometricData: null,
-          biometricImage: null,
-        });
-        
-        // Navigate to step 1
-        setCurrentStep(1);
-        
-        // Increment instance key to ensure fresh fingerprint component when they get back to step 2
-        setInstanceKey(prevKey => prevKey + 1);
-        
-        // Clear success message
-        setShowSuccess(false);
-      }, 2000); // 2 seconds delay to ensure user sees the success message
+    // Only auto-redirect when we have a success message AND it includes a blockchain transaction ID
+    // or the transaction is confirmed but didn't return an ID (fallback case)
+    if (showSuccess && 
+        (successMessage.includes('Blockchain Transaction ID:') || 
+         successMessage.includes('confirmation pending'))) {
+      
+      // Only proceed if we're not still waiting for blockchain confirmation
+      if (!successMessage.includes('Waiting for blockchain confirmation')) {
+        // Set a timer to automatically redirect to step 1 after showing success message
+        redirectTimer = setTimeout(() => {
+          // Reset form data for next voter
+          setFormData({
+            nationalid: '',
+            firstname: '',
+            middlename: '',
+            surname: '',
+            designatedPollingStation: '',
+            biometricData: null,
+            biometricImage: null,
+          });
+          
+          // Navigate to step 1
+          setCurrentStep(1);
+          
+          // Increment instance key to ensure fresh fingerprint component when they get back to step 2
+          setInstanceKey(prevKey => prevKey + 1);
+          
+          // Clear success message
+          setShowSuccess(false);
+          
+          // Reset edit mode if we were editing
+          if (isEditMode) {
+            setIsEditMode(false);
+            setEditingVoterId(null);
+          }
+        }, 5000); // 5 seconds delay to ensure user sees the blockchain transaction ID
+      }
     }
     
     // Cleanup timer if component unmounts
     return () => {
       if (redirectTimer) clearTimeout(redirectTimer);
     };
-  }, [showSuccess, isEditMode]);
+  }, [showSuccess, successMessage, isEditMode]);
 
+  // Function to poll for blockchain transaction status
+  const pollForTransactionStatus = async (voterId, initialTxId, isUpdate = false) => {
+    let attempts = 0;
+    const maxAttempts = 15; // Maximum polling attempts
+    const pollInterval = 2000; // Poll every 2 seconds
+    let txId = initialTxId;
+    
+    // Set a temporary informational message
+    setSuccessMessage(isUpdate 
+      ? 'Voter record updated. Waiting for blockchain confirmation...' 
+      : 'Voter registered. Waiting for blockchain confirmation...');
+    setShowSuccess(true);
+    
+    // Keep polling until we get a transaction ID or hit max attempts
+    while (attempts < maxAttempts && (!txId || txId === 'pending')) {
+      try {
+        console.log(`Polling for transaction status, attempt ${attempts + 1}/${maxAttempts}`);
+        
+        // Wait before polling
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+        
+        // Get the voter record with the latest status
+        const voterRecord = await voterAPI.getVoterById(voterId);
+        
+        // Check for transaction ID - it might be in different fields
+        const blockchainTxId = voterRecord.blockchain_tx_id || voterRecord.transactionId;
+        
+        if (blockchainTxId && blockchainTxId !== 'pending') {
+          txId = blockchainTxId;
+          console.log('Blockchain transaction confirmed:', txId);
+          break;
+        }
+        
+        attempts++;
+      } catch (err) {
+        console.error('Error polling for transaction status:', err);
+        attempts++;
+      }
+    }
+    
+    // Update the success message with the transaction ID
+    if (txId && txId !== 'pending') {
+      setSuccessMessage(isUpdate 
+        ? `Voter record updated successfully! Blockchain Transaction ID: ${txId}`
+        : `Voter registered successfully! Blockchain Transaction ID: ${txId}`);
+    } else {
+      // If we couldn't get a transaction ID after polling
+      setSuccessMessage(isUpdate 
+        ? 'Voter record updated successfully! Blockchain confirmation pending.'
+        : 'Voter registered successfully! Blockchain confirmation pending.');
+    }
+    
+    // Keep showing the success message - useEffect will handle resetting the form
+    setIsSubmitting(false);
+  };
+  
   const handleFormSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -195,8 +265,11 @@ const VoterRegister = () => {
           } : {})
         });
         
-        setSuccessMessage('Voter record updated successfully!');
-        setShowSuccess(true);
+        // Get initial transaction ID (might be pending)
+        const initialTxId = apiResponse.transactionId || apiResponse.blockchain_tx_id;
+        
+        // Start polling for transaction status
+        pollForTransactionStatus(editingVoterId, initialTxId, true);
       } else {
         // For new voters, use POST with no ID
         apiResponse = await voterAPI.createVoter({
@@ -214,10 +287,14 @@ const VoterRegister = () => {
         });
         
         // Update formData with the returned ID for potential biometric updates
-        setFormData(prev => ({ ...prev, id: apiResponse.id }));
+        const newVoterId = apiResponse.id || apiResponse.nationalid;
+        setFormData(prev => ({ ...prev, id: newVoterId }));
         
-        setSuccessMessage('Voter registered successfully!');
-        setShowSuccess(true);
+        // Get initial transaction ID (might be pending)
+        const initialTxId = apiResponse.transactionId || apiResponse.blockchain_tx_id;
+        
+        // Start polling for transaction status
+        pollForTransactionStatus(newVoterId, initialTxId, false);
       }
       
       // NOTE: The auto-redirect to step 1 with cleared data will happen
@@ -226,7 +303,6 @@ const VoterRegister = () => {
     } catch (err) {
       console.error('Error saving voter:', err);
       setError(err.message || 'An error occurred while saving the voter record');
-    } finally {
       setIsSubmitting(false);
     }
   };
@@ -421,11 +497,34 @@ const VoterRegister = () => {
         {/* Success message */}
         {showSuccess && (
           <div className="mt-4 bg-green-50 border-l-4 border-green-400 p-4 rounded-md">
-            <div className="flex items-center">
-              <svg className="h-5 w-5 text-green-400 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2h-1V9a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-              <p className="text-sm text-green-700">{successMessage}</p>
+            <div className="flex">
+              {successMessage.includes('Waiting for blockchain confirmation') ? (
+                <svg className="animate-spin h-5 w-5 text-green-500 mr-2 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              ) : (
+                <svg className="h-5 w-5 text-green-400 mr-2 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              )}
+              <div className="text-sm text-green-700">
+                {successMessage.includes('Blockchain Transaction ID:') ? (
+                  <>
+                    <p className="font-medium mb-1">{isEditMode ? "Voter updated successfully!" : "Voter registered successfully!"}</p>
+                    <p className="font-mono bg-green-100 p-1 rounded">Blockchain Transaction ID: <span className="font-bold">{successMessage.split('Blockchain Transaction ID:')[1].trim()}</span></p>
+                    <p className="mt-1 text-xs italic">The screen will reset in a few seconds...</p>
+                  </>
+                ) : successMessage.includes('Waiting for blockchain confirmation') ? (
+                  <>
+                    <p className="font-medium mb-1">Processing Blockchain Transaction</p>
+                    <p>{successMessage}</p>
+                    <p className="mt-1 text-xs">This may take a few moments. Please wait...</p>
+                  </>
+                ) : (
+                  <p>{successMessage}</p>
+                )}
+              </div>
             </div>
           </div>
         )}
