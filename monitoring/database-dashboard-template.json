@@ -1,0 +1,603 @@
+{
+  "properties": {
+    "lenses": {
+      "0": {
+        "order": 0,
+        "parts": {
+          "0": {
+            "position": {
+              "x": 0,
+              "y": 0,
+              "colSpan": 6,
+              "rowSpan": 4
+            },
+            "metadata": {
+              "inputs": [
+                {
+                  "name": "ComponentId",
+                  "value": {
+                    "Name": "kwelivote-db-server",
+                    "ResourceGroup": "kwelivote-rg",
+                    "ResourceType": "Microsoft.DBforPostgreSQL/flexibleServers"
+                  }
+                },
+                {
+                  "name": "TimeContext",
+                  "value": {
+                    "durationMs": 86400000,
+                    "endTime": null,
+                    "createdTime": "2023-08-01T00:00:00.000Z",
+                    "isInitialTime": true,
+                    "grain": 1,
+                    "useDashboardTimeRange": false
+                  }
+                },
+                {
+                  "name": "Metrics",
+                  "value": [
+                    {
+                      "resourceMetadata": {
+                        "id": "{resource-id}"
+                      },
+                      "name": "cpu_percent",
+                      "aggregationType": 4,
+                      "metricVisualization": {
+                        "color": "blue"
+                      }
+                    },
+                    {
+                      "resourceMetadata": {
+                        "id": "{resource-id}"
+                      },
+                      "name": "memory_percent",
+                      "aggregationType": 4,
+                      "metricVisualization": {
+                        "color": "magenta"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "type": "Extension/Microsoft_Azure_Monitoring/PartType/MetricsChartPart",
+              "settings": {
+                "content": {
+                  "title": "CPU and Memory Usage",
+                  "charts": [
+                    {
+                      "metrics": [
+                        {
+                          "resourceMetadata": {
+                            "id": "{resource-id}"
+                          },
+                          "name": "cpu_percent",
+                          "aggregationType": 4,
+                          "metricVisualization": {
+                            "color": "blue"
+                          }
+                        },
+                        {
+                          "resourceMetadata": {
+                            "id": "{resource-id}"
+                          },
+                          "name": "memory_percent",
+                          "aggregationType": 4,
+                          "metricVisualization": {
+                            "color": "magenta"
+                          }
+                        }
+                      ],
+                      "title": "CPU and Memory Usage (%)",
+                      "visualization": {
+                        "chartType": 2,
+                        "legendVisualization": {
+                          "isVisible": true,
+                          "position": 2,
+                          "hideSubtitle": false
+                        },
+                        "axisVisualization": {
+                          "x": {
+                            "isVisible": true,
+                            "axisType": 2
+                          },
+                          "y": {
+                            "isVisible": true,
+                            "axisType": 1
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "1": {
+            "position": {
+              "x": 6,
+              "y": 0,
+              "colSpan": 6,
+              "rowSpan": 4
+            },
+            "metadata": {
+              "inputs": [
+                {
+                  "name": "ComponentId",
+                  "value": {
+                    "Name": "kwelivote-db-server",
+                    "ResourceGroup": "kwelivote-rg",
+                    "ResourceType": "Microsoft.DBforPostgreSQL/flexibleServers"
+                  }
+                },
+                {
+                  "name": "TimeContext",
+                  "value": {
+                    "durationMs": 86400000,
+                    "endTime": null,
+                    "createdTime": "2023-08-01T00:00:00.000Z",
+                    "isInitialTime": true,
+                    "grain": 1,
+                    "useDashboardTimeRange": false
+                  }
+                },
+                {
+                  "name": "Metrics",
+                  "value": [
+                    {
+                      "resourceMetadata": {
+                        "id": "{resource-id}"
+                      },
+                      "name": "active_connections",
+                      "aggregationType": 4,
+                      "metricVisualization": {
+                        "color": "green"
+                      }
+                    },
+                    {
+                      "resourceMetadata": {
+                        "id": "{resource-id}"
+                      },
+                      "name": "connections_failed",
+                      "aggregationType": 1,
+                      "metricVisualization": {
+                        "color": "red"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "type": "Extension/Microsoft_Azure_Monitoring/PartType/MetricsChartPart",
+              "settings": {
+                "content": {
+                  "title": "Database Connections",
+                  "charts": [
+                    {
+                      "metrics": [
+                        {
+                          "resourceMetadata": {
+                            "id": "{resource-id}"
+                          },
+                          "name": "active_connections",
+                          "aggregationType": 4,
+                          "metricVisualization": {
+                            "color": "green"
+                          }
+                        },
+                        {
+                          "resourceMetadata": {
+                            "id": "{resource-id}"
+                          },
+                          "name": "connections_failed",
+                          "aggregationType": 1,
+                          "metricVisualization": {
+                            "color": "red"
+                          }
+                        }
+                      ],
+                      "title": "Active and Failed Connections",
+                      "visualization": {
+                        "chartType": 2,
+                        "legendVisualization": {
+                          "isVisible": true,
+                          "position": 2,
+                          "hideSubtitle": false
+                        },
+                        "axisVisualization": {
+                          "x": {
+                            "isVisible": true,
+                            "axisType": 2
+                          },
+                          "y": {
+                            "isVisible": true,
+                            "axisType": 1
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "2": {
+            "position": {
+              "x": 0,
+              "y": 4,
+              "colSpan": 6,
+              "rowSpan": 4
+            },
+            "metadata": {
+              "inputs": [
+                {
+                  "name": "ComponentId",
+                  "value": {
+                    "Name": "kwelivote-db-server",
+                    "ResourceGroup": "kwelivote-rg",
+                    "ResourceType": "Microsoft.DBforPostgreSQL/flexibleServers"
+                  }
+                },
+                {
+                  "name": "TimeContext",
+                  "value": {
+                    "durationMs": 86400000,
+                    "endTime": null,
+                    "createdTime": "2023-08-01T00:00:00.000Z",
+                    "isInitialTime": true,
+                    "grain": 1,
+                    "useDashboardTimeRange": false
+                  }
+                },
+                {
+                  "name": "Metrics",
+                  "value": [
+                    {
+                      "resourceMetadata": {
+                        "id": "{resource-id}"
+                      },
+                      "name": "storage_percent",
+                      "aggregationType": 4,
+                      "metricVisualization": {
+                        "color": "yellow"
+                      }
+                    },
+                    {
+                      "resourceMetadata": {
+                        "id": "{resource-id}"
+                      },
+                      "name": "storage_used",
+                      "aggregationType": 4,
+                      "metricVisualization": {
+                        "color": "orange"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "type": "Extension/Microsoft_Azure_Monitoring/PartType/MetricsChartPart",
+              "settings": {
+                "content": {
+                  "title": "Storage Usage",
+                  "charts": [
+                    {
+                      "metrics": [
+                        {
+                          "resourceMetadata": {
+                            "id": "{resource-id}"
+                          },
+                          "name": "storage_percent",
+                          "aggregationType": 4,
+                          "metricVisualization": {
+                            "color": "yellow"
+                          }
+                        },
+                        {
+                          "resourceMetadata": {
+                            "id": "{resource-id}"
+                          },
+                          "name": "storage_used",
+                          "aggregationType": 4,
+                          "metricVisualization": {
+                            "color": "orange"
+                          }
+                        }
+                      ],
+                      "title": "Storage Usage (% and Bytes)",
+                      "visualization": {
+                        "chartType": 2,
+                        "legendVisualization": {
+                          "isVisible": true,
+                          "position": 2,
+                          "hideSubtitle": false
+                        },
+                        "axisVisualization": {
+                          "x": {
+                            "isVisible": true,
+                            "axisType": 2
+                          },
+                          "y": {
+                            "isVisible": true,
+                            "axisType": 1
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "3": {
+            "position": {
+              "x": 6,
+              "y": 4,
+              "colSpan": 6,
+              "rowSpan": 4
+            },
+            "metadata": {
+              "inputs": [
+                {
+                  "name": "ComponentId",
+                  "value": {
+                    "Name": "kwelivote-db-server",
+                    "ResourceGroup": "kwelivote-rg",
+                    "ResourceType": "Microsoft.DBforPostgreSQL/flexibleServers"
+                  }
+                },
+                {
+                  "name": "TimeContext",
+                  "value": {
+                    "durationMs": 86400000,
+                    "endTime": null,
+                    "createdTime": "2023-08-01T00:00:00.000Z",
+                    "isInitialTime": true,
+                    "grain": 1,
+                    "useDashboardTimeRange": false
+                  }
+                },
+                {
+                  "name": "Metrics",
+                  "value": [
+                    {
+                      "resourceMetadata": {
+                        "id": "{resource-id}"
+                      },
+                      "name": "network_bytes_ingress",
+                      "aggregationType": 1,
+                      "metricVisualization": {
+                        "color": "teal"
+                      }
+                    },
+                    {
+                      "resourceMetadata": {
+                        "id": "{resource-id}"
+                      },
+                      "name": "network_bytes_egress",
+                      "aggregationType": 1,
+                      "metricVisualization": {
+                        "color": "purple"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "type": "Extension/Microsoft_Azure_Monitoring/PartType/MetricsChartPart",
+              "settings": {
+                "content": {
+                  "title": "Network Traffic",
+                  "charts": [
+                    {
+                      "metrics": [
+                        {
+                          "resourceMetadata": {
+                            "id": "{resource-id}"
+                          },
+                          "name": "network_bytes_ingress",
+                          "aggregationType": 1,
+                          "metricVisualization": {
+                            "color": "teal"
+                          }
+                        },
+                        {
+                          "resourceMetadata": {
+                            "id": "{resource-id}"
+                          },
+                          "name": "network_bytes_egress",
+                          "aggregationType": 1,
+                          "metricVisualization": {
+                            "color": "purple"
+                          }
+                        }
+                      ],
+                      "title": "Network In/Out (Bytes)",
+                      "visualization": {
+                        "chartType": 2,
+                        "legendVisualization": {
+                          "isVisible": true,
+                          "position": 2,
+                          "hideSubtitle": false
+                        },
+                        "axisVisualization": {
+                          "x": {
+                            "isVisible": true,
+                            "axisType": 2
+                          },
+                          "y": {
+                            "isVisible": true,
+                            "axisType": 1
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "4": {
+            "position": {
+              "x": 0,
+              "y": 8,
+              "colSpan": 12,
+              "rowSpan": 4
+            },
+            "metadata": {
+              "inputs": [
+                {
+                  "name": "ComponentId",
+                  "value": {
+                    "Name": "kwelivote-db-server",
+                    "ResourceGroup": "kwelivote-rg",
+                    "ResourceType": "Microsoft.DBforPostgreSQL/flexibleServers"
+                  }
+                },
+                {
+                  "name": "TimeContext",
+                  "value": {
+                    "durationMs": 86400000,
+                    "endTime": null,
+                    "createdTime": "2023-08-01T00:00:00.000Z",
+                    "isInitialTime": true,
+                    "grain": 1,
+                    "useDashboardTimeRange": false
+                  }
+                },
+                {
+                  "name": "Metrics",
+                  "value": [
+                    {
+                      "resourceMetadata": {
+                        "id": "{resource-id}"
+                      },
+                      "name": "read_throughput",
+                      "aggregationType": 4,
+                      "metricVisualization": {
+                        "color": "blue"
+                      }
+                    },
+                    {
+                      "resourceMetadata": {
+                        "id": "{resource-id}"
+                      },
+                      "name": "write_throughput",
+                      "aggregationType": 4,
+                      "metricVisualization": {
+                        "color": "green"
+                      }
+                    },
+                    {
+                      "resourceMetadata": {
+                        "id": "{resource-id}"
+                      },
+                      "name": "io_consumption_percent",
+                      "aggregationType": 4,
+                      "metricVisualization": {
+                        "color": "red"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "type": "Extension/Microsoft_Azure_Monitoring/PartType/MetricsChartPart",
+              "settings": {
+                "content": {
+                  "title": "I/O Performance",
+                  "charts": [
+                    {
+                      "metrics": [
+                        {
+                          "resourceMetadata": {
+                            "id": "{resource-id}"
+                          },
+                          "name": "read_throughput",
+                          "aggregationType": 4,
+                          "metricVisualization": {
+                            "color": "blue"
+                          }
+                        },
+                        {
+                          "resourceMetadata": {
+                            "id": "{resource-id}"
+                          },
+                          "name": "write_throughput",
+                          "aggregationType": 4,
+                          "metricVisualization": {
+                            "color": "green"
+                          }
+                        },
+                        {
+                          "resourceMetadata": {
+                            "id": "{resource-id}"
+                          },
+                          "name": "io_consumption_percent",
+                          "aggregationType": 4,
+                          "metricVisualization": {
+                            "color": "red"
+                          }
+                        }
+                      ],
+                      "title": "I/O Performance Metrics",
+                      "visualization": {
+                        "chartType": 2,
+                        "legendVisualization": {
+                          "isVisible": true,
+                          "position": 2,
+                          "hideSubtitle": false
+                        },
+                        "axisVisualization": {
+                          "x": {
+                            "isVisible": true,
+                            "axisType": 2
+                          },
+                          "y": {
+                            "isVisible": true,
+                            "axisType": 1
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "metadata": {
+      "model": {
+        "timeRange": {
+          "value": {
+            "relative": {
+              "duration": 24,
+              "timeUnit": 1
+            }
+          },
+          "type": "MsPortalFx.Composition.Configuration.ValueTypes.TimeRange"
+        },
+        "filterLocale": {
+          "value": "en-us"
+        },
+        "filters": {
+          "value": {
+            "MsPortalFx_TimeRange": {
+              "model": {
+                "format": "utc",
+                "granularity": "auto",
+                "relative": "24h"
+              },
+              "displayCache": {
+                "name": "UTC Time",
+                "value": "Past 24 hours"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "name": "KweliVoteDatabaseMonitoring",
+  "type": "Microsoft.Portal/dashboards",
+  "location": "westeurope",
+  "tags": {
+    "hidden-title": "KweliVote Database Monitoring Dashboard"
+  }
+}

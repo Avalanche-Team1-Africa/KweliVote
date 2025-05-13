@@ -1,0 +1,494 @@
+{
+  "properties": {
+    "lenses": {
+      "0": {
+        "order": 0,
+        "parts": {
+          "0": {
+            "position": {
+              "x": 0,
+              "y": 0,
+              "colSpan": 12,
+              "rowSpan": 2
+            },
+            "metadata": {
+              "inputs": [],
+              "type": "Extension/HubsExtension/PartType/MarkdownPart",
+              "settings": {
+                "content": {
+                  "settings": {
+                    "content": "# KweliVote Biometric Processing Monitoring\n\nThis dashboard provides visibility into the biometric processing performance and health metrics for the KweliVote application.",
+                    "title": "",
+                    "subtitle": "",
+                    "markdownSource": 1
+                  }
+                }
+              }
+            }
+          },
+          "1": {
+            "position": {
+              "x": 0,
+              "y": 2,
+              "colSpan": 6,
+              "rowSpan": 3
+            },
+            "metadata": {
+              "inputs": [
+                {
+                  "name": "resourceTypeMode",
+                  "value": "workspace"
+                },
+                {
+                  "name": "ComponentId",
+                  "value": {
+                    "Name": "kwelivote-logs",
+                    "ResourceGroup": "kwelivote-rg",
+                    "ResourceType": "Microsoft.OperationalInsights/workspaces"
+                  }
+                },
+                {
+                  "name": "Query",
+                  "value": "customMetrics\n| where name == \"BiometricProcessingTimeMs\"\n| summarize avg(value), percentile(value, 95) by bin(timestamp, 15m)\n| render timechart"
+                },
+                {
+                  "name": "PartTitle",
+                  "value": "Fingerprint Template Fusion Processing Time"
+                },
+                {
+                  "name": "PartSubTitle",
+                  "value": "Average and 95th percentile (milliseconds)"
+                },
+                {
+                  "name": "TimeRange",
+                  "value": "P1D"
+                },
+                {
+                  "name": "ControlType",
+                  "value": "FrameControlChart"
+                }
+              ],
+              "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+              "settings": {}
+            }
+          },
+          "2": {
+            "position": {
+              "x": 6,
+              "y": 2,
+              "colSpan": 6,
+              "rowSpan": 3
+            },
+            "metadata": {
+              "inputs": [
+                {
+                  "name": "resourceTypeMode",
+                  "value": "workspace"
+                },
+                {
+                  "name": "ComponentId",
+                  "value": {
+                    "Name": "kwelivote-logs",
+                    "ResourceGroup": "kwelivote-rg",
+                    "ResourceType": "Microsoft.OperationalInsights/workspaces"
+                  }
+                },
+                {
+                  "name": "Query",
+                  "value": "customMetrics\n| where name == \"BiometricTemplateSize\"\n| summarize avg(value), min(value), max(value) by bin(timestamp, 15m)\n| render timechart"
+                },
+                {
+                  "name": "PartTitle",
+                  "value": "Template Size"
+                },
+                {
+                  "name": "PartSubTitle",
+                  "value": "Average, Min, Max (bytes)"
+                },
+                {
+                  "name": "TimeRange",
+                  "value": "P1D"
+                },
+                {
+                  "name": "ControlType",
+                  "value": "FrameControlChart"
+                }
+              ],
+              "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+              "settings": {}
+            }
+          },
+          "3": {
+            "position": {
+              "x": 0,
+              "y": 5,
+              "colSpan": 6,
+              "rowSpan": 3
+            },
+            "metadata": {
+              "inputs": [
+                {
+                  "name": "resourceTypeMode",
+                  "value": "workspace"
+                },
+                {
+                  "name": "ComponentId",
+                  "value": {
+                    "Name": "kwelivote-logs",
+                    "ResourceGroup": "kwelivote-rg",
+                    "ResourceType": "Microsoft.OperationalInsights/workspaces"
+                  }
+                },
+                {
+                  "name": "Query",
+                  "value": "customMetrics\n| where name == \"BiometricProcessingSuccessRate\"\n| summarize avg(value) by bin(timestamp, 15m)\n| render timechart"
+                },
+                {
+                  "name": "PartTitle",
+                  "value": "Template Fusion Success Rate"
+                },
+                {
+                  "name": "PartSubTitle",
+                  "value": "% successful"
+                },
+                {
+                  "name": "TimeRange",
+                  "value": "P1D"
+                },
+                {
+                  "name": "ControlType",
+                  "value": "FrameControlChart"
+                }
+              ],
+              "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+              "settings": {}
+            }
+          },
+          "4": {
+            "position": {
+              "x": 6,
+              "y": 5,
+              "colSpan": 6,
+              "rowSpan": 3
+            },
+            "metadata": {
+              "inputs": [
+                {
+                  "name": "resourceTypeMode",
+                  "value": "workspace"
+                },
+                {
+                  "name": "ComponentId",
+                  "value": {
+                    "Name": "kwelivote-logs",
+                    "ResourceGroup": "kwelivote-rg",
+                    "ResourceType": "Microsoft.OperationalInsights/workspaces"
+                  }
+                },
+                {
+                  "name": "Query",
+                  "value": "customEvents\n| where name == \"BiometricOperation\"\n| summarize count() by operation=tostring(customDimensions.operation), bin(timestamp, 1h)\n| render columnchart"
+                },
+                {
+                  "name": "PartTitle",
+                  "value": "Biometric Operations"
+                },
+                {
+                  "name": "PartSubTitle",
+                  "value": "Operations by hour"
+                },
+                {
+                  "name": "TimeRange",
+                  "value": "P1D"
+                },
+                {
+                  "name": "ControlType",
+                  "value": "FrameControlChart"
+                }
+              ],
+              "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+              "settings": {}
+            }
+          },
+          "5": {
+            "position": {
+              "x": 0,
+              "y": 8,
+              "colSpan": 12,
+              "rowSpan": 3
+            },
+            "metadata": {
+              "inputs": [
+                {
+                  "name": "resourceTypeMode",
+                  "value": "workspace"
+                },
+                {
+                  "name": "ComponentId",
+                  "value": {
+                    "Name": "kwelivote-logs",
+                    "ResourceGroup": "kwelivote-rg",
+                    "ResourceType": "Microsoft.OperationalInsights/workspaces"
+                  }
+                },
+                {
+                  "name": "Query",
+                  "value": "// Biometric processing errors\nexceptions\n| where timestamp > ago(24h)\n| where customDimensions.component == \"biometric\" or operation_Name contains \"fingerprint\" or operation_Name contains \"biometric\" or outerMessage contains \"biometric\"\n| project timestamp, operation_Name, outerMessage, problemId, customDimensions\n| order by timestamp desc"
+                },
+                {
+                  "name": "PartTitle",
+                  "value": "Recent Biometric Processing Errors"
+                },
+                {
+                  "name": "PartSubTitle",
+                  "value": "Last 24 hours"
+                },
+                {
+                  "name": "TimeRange",
+                  "value": "P1D"
+                },
+                {
+                  "name": "ControlType",
+                  "value": "AnalyticsGrid"
+                }
+              ],
+              "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+              "settings": {}
+            }
+          },
+          "6": {
+            "position": {
+              "x": 0,
+              "y": 11,
+              "colSpan": 6,
+              "rowSpan": 3
+            },
+            "metadata": {
+              "inputs": [
+                {
+                  "name": "ComponentId",
+                  "value": {
+                    "Name": "kwelivote-api",
+                    "ResourceGroup": "kwelivote-rg",
+                    "ResourceType": "microsoft.web/sites"
+                  }
+                },
+                {
+                  "name": "TimeContext",
+                  "value": {
+                    "durationMs": 86400000,
+                    "endTime": null,
+                    "createdTime": "2023-08-01T00:00:00.000Z",
+                    "isInitialTime": true,
+                    "grain": 1,
+                    "useDashboardTimeRange": false
+                  }
+                },
+                {
+                  "name": "Metrics",
+                  "value": [
+                    {
+                      "resourceMetadata": {
+                        "id": "{resource-id}"
+                      },
+                      "name": "MemoryWorkingSet",
+                      "aggregationType": 4,
+                      "metricVisualization": {
+                        "color": "blue"
+                      }
+                    },
+                    {
+                      "resourceMetadata": {
+                        "id": "{resource-id}"
+                      },
+                      "name": "CpuTime",
+                      "aggregationType": 1,
+                      "metricVisualization": {
+                        "color": "purple"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "type": "Extension/Microsoft_Azure_Monitoring/PartType/MetricsChartPart",
+              "settings": {
+                "content": {
+                  "title": "Backend Resource Usage",
+                  "charts": [
+                    {
+                      "metrics": [
+                        {
+                          "resourceMetadata": {
+                            "id": "{resource-id}"
+                          },
+                          "name": "MemoryWorkingSet",
+                          "aggregationType": 4,
+                          "metricVisualization": {
+                            "color": "blue"
+                          }
+                        },
+                        {
+                          "resourceMetadata": {
+                            "id": "{resource-id}"
+                          },
+                          "name": "CpuTime",
+                          "aggregationType": 1,
+                          "metricVisualization": {
+                            "color": "purple"
+                          }
+                        }
+                      ],
+                      "title": "Memory and CPU Usage",
+                      "visualization": {
+                        "chartType": 2,
+                        "legendVisualization": {
+                          "isVisible": true,
+                          "position": 2,
+                          "hideSubtitle": false
+                        },
+                        "axisVisualization": {
+                          "x": {
+                            "isVisible": true,
+                            "axisType": 2
+                          },
+                          "y": {
+                            "isVisible": true,
+                            "axisType": 1
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "7": {
+            "position": {
+              "x": 6,
+              "y": 11,
+              "colSpan": 6,
+              "rowSpan": 3
+            },
+            "metadata": {
+              "inputs": [
+                {
+                  "name": "ComponentId",
+                  "value": {
+                    "Name": "kwelivote-api",
+                    "ResourceGroup": "kwelivote-rg",
+                    "ResourceType": "microsoft.web/sites"
+                  }
+                },
+                {
+                  "name": "TimeContext",
+                  "value": {
+                    "durationMs": 86400000,
+                    "endTime": null,
+                    "createdTime": "2023-08-01T00:00:00.000Z",
+                    "isInitialTime": true,
+                    "grain": 1,
+                    "useDashboardTimeRange": false
+                  }
+                },
+                {
+                  "name": "Metrics",
+                  "value": [
+                    {
+                      "resourceMetadata": {
+                        "id": "{resource-id}"
+                      },
+                      "name": "HttpResponseTime",
+                      "aggregationType": 4,
+                      "metricVisualization": {
+                        "color": "green"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "type": "Extension/Microsoft_Azure_Monitoring/PartType/MetricsChartPart",
+              "settings": {
+                "content": {
+                  "title": "API Response Time",
+                  "charts": [
+                    {
+                      "metrics": [
+                        {
+                          "resourceMetadata": {
+                            "id": "{resource-id}"
+                          },
+                          "name": "HttpResponseTime",
+                          "aggregationType": 4,
+                          "metricVisualization": {
+                            "color": "green"
+                          }
+                        }
+                      ],
+                      "title": "HTTP Response Time",
+                      "visualization": {
+                        "chartType": 2,
+                        "legendVisualization": {
+                          "isVisible": true,
+                          "position": 2,
+                          "hideSubtitle": false
+                        },
+                        "axisVisualization": {
+                          "x": {
+                            "isVisible": true,
+                            "axisType": 2
+                          },
+                          "y": {
+                            "isVisible": true,
+                            "axisType": 1
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "metadata": {
+      "model": {
+        "timeRange": {
+          "value": {
+            "relative": {
+              "duration": 24,
+              "timeUnit": 1
+            }
+          },
+          "type": "MsPortalFx.Composition.Configuration.ValueTypes.TimeRange"
+        },
+        "filterLocale": {
+          "value": "en-us"
+        },
+        "filters": {
+          "value": {
+            "MsPortalFx_TimeRange": {
+              "model": {
+                "format": "utc",
+                "granularity": "auto",
+                "relative": "24h"
+              },
+              "displayCache": {
+                "name": "UTC Time",
+                "value": "Past 24 hours"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "name": "KweliVoteBiometricMonitoring",
+  "type": "Microsoft.Portal/dashboards",
+  "location": "westeurope",
+  "tags": {
+    "hidden-title": "KweliVote Biometric Processing Monitoring Dashboard"
+  }
+}

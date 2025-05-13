@@ -1,5 +1,5 @@
-// API Base URL - should match with your Django backend
-const API_BASE_URL = 'http://127.0.0.1:8000/api';
+// API Base URL - configured for different environments
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:8000/api';
 
 // Helper for handling API errors
 const handleApiError = (error) => {

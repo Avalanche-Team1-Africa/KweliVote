@@ -1,0 +1,84 @@
+name: Azure Deployment
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build_and_deploy_backend:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true) || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    name: Build and Deploy Backend
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+        lfs: false
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r kwelivote-app/backend/requirements.txt
+        pip install gunicorn
+        
+    - name: Make startup script executable
+      run: chmod +x kwelivote-app/backend/startup.sh
+    
+    - name: Deploy to Azure Web App
+      id: deploy-to-webapp
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: 'kwelivote-api'
+        slot-name: 'production'
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        package: 'kwelivote-app/backend'
+
+  build_and_deploy_frontend:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true) || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    name: Build and Deploy Frontend
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+        lfs: false
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        
+    - name: Install dependencies
+      run: |
+        cd kwelivote-app/frontend
+        npm ci
+        
+    - name: Build frontend
+      run: |
+        cd kwelivote-app/frontend
+        cp .env.production .env
+        npm run build
+        
+    - name: Deploy to Azure Static Web Apps
+      id: deploy-to-swa
+      uses: Azure/static-web-apps-deploy@v1
+      with:
+        azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        action: "upload"
+        app_location: "/kwelivote-app/frontend"
+        api_location: ""
+        output_location: "build"

@@ -34,6 +34,10 @@ from .views import (
     save_keyperson_biometric_data
 )
 
+# Import health check views
+from .health_checks import health_check, readiness_check, liveness_check
+from .biometric_health import biometric_health_check
+
 # Set up DRF router
 router = routers.DefaultRouter()
 router.register(r'voters', VoterViewSet, basename='voter')
@@ -46,6 +50,12 @@ urlpatterns = [
     path('admin/', admin.site.urls),  # Admin endpoint
     path('api/', include(router.urls)),  # API endpoints
     path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),  # DRF browsable API login
+    
+    # Health check endpoints for Azure monitoring
+    path('api/health-check/', health_check, name='health_check'),
+    path('api/readiness/', readiness_check, name='readiness_check'),
+    path('api/liveness/', liveness_check, name='liveness_check'),
+    path('api/health-check/biometric/', biometric_health_check, name='biometric_health_check'),
     
     # JWT Authentication endpoints
     path('api/token/', KeyPersonTokenObtainPairView.as_view(), name='token_obtain_pair'),

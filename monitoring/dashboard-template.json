@@ -1,0 +1,450 @@
+{
+  "properties": {
+    "lenses": {
+      "0": {
+        "order": 0,
+        "parts": {
+          "0": {
+            "position": {
+              "x": 0,
+              "y": 0,
+              "colSpan": 6,
+              "rowSpan": 4
+            },
+            "metadata": {
+              "inputs": [
+                {
+                  "name": "ComponentId",
+                  "value": {
+                    "Name": "kwelivote-api",
+                    "ResourceGroup": "kwelivote-rg",
+                    "ResourceType": "microsoft.web/sites"
+                  }
+                },
+                {
+                  "name": "TimeContext",
+                  "value": {
+                    "durationMs": 86400000,
+                    "endTime": null,
+                    "createdTime": "2023-08-01T00:00:00.000Z",
+                    "isInitialTime": true,
+                    "grain": 1,
+                    "useDashboardTimeRange": false
+                  }
+                },
+                {
+                  "name": "Metrics",
+                  "value": [
+                    {
+                      "resourceMetadata": {
+                        "id": "{resource-id}"
+                      },
+                      "name": "Requests",
+                      "aggregationType": 1,
+                      "metricVisualization": {
+                        "color": "blue"
+                      }
+                    },
+                    {
+                      "resourceMetadata": {
+                        "id": "{resource-id}"
+                      },
+                      "name": "Http5xx",
+                      "aggregationType": 1,
+                      "metricVisualization": {
+                        "color": "red"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "type": "Extension/Microsoft_Azure_Monitoring/PartType/MetricsChartPart",
+              "settings": {
+                "content": {
+                  "title": "API Requests and Errors",
+                  "charts": [
+                    {
+                      "metrics": [
+                        {
+                          "resourceMetadata": {
+                            "id": "{resource-id}"
+                          },
+                          "name": "Requests",
+                          "aggregationType": 1,
+                          "metricVisualization": {
+                            "color": "blue"
+                          }
+                        },
+                        {
+                          "resourceMetadata": {
+                            "id": "{resource-id}"
+                          },
+                          "name": "Http5xx",
+                          "aggregationType": 1,
+                          "metricVisualization": {
+                            "color": "red"
+                          }
+                        }
+                      ],
+                      "title": "API Requests and Errors",
+                      "visualization": {
+                        "chartType": 2,
+                        "legendVisualization": {
+                          "isVisible": true,
+                          "position": 2,
+                          "hideSubtitle": false
+                        },
+                        "axisVisualization": {
+                          "x": {
+                            "isVisible": true,
+                            "axisType": 2
+                          },
+                          "y": {
+                            "isVisible": true,
+                            "axisType": 1
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "1": {
+            "position": {
+              "x": 6,
+              "y": 0,
+              "colSpan": 6,
+              "rowSpan": 4
+            },
+            "metadata": {
+              "inputs": [
+                {
+                  "name": "ComponentId",
+                  "value": {
+                    "Name": "kwelivote-db-server",
+                    "ResourceGroup": "kwelivote-rg",
+                    "ResourceType": "Microsoft.DBforPostgreSQL/flexibleServers"
+                  }
+                },
+                {
+                  "name": "TimeContext",
+                  "value": {
+                    "durationMs": 86400000,
+                    "endTime": null,
+                    "createdTime": "2023-08-01T00:00:00.000Z",
+                    "isInitialTime": true,
+                    "grain": 1,
+                    "useDashboardTimeRange": false
+                  }
+                },
+                {
+                  "name": "Metrics",
+                  "value": [
+                    {
+                      "resourceMetadata": {
+                        "id": "{resource-id}"
+                      },
+                      "name": "active_connections",
+                      "aggregationType": 4,
+                      "metricVisualization": {
+                        "color": "purple"
+                      }
+                    },
+                    {
+                      "resourceMetadata": {
+                        "id": "{resource-id}"
+                      },
+                      "name": "cpu_percent",
+                      "aggregationType": 4,
+                      "metricVisualization": {
+                        "color": "orange"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "type": "Extension/Microsoft_Azure_Monitoring/PartType/MetricsChartPart",
+              "settings": {
+                "content": {
+                  "title": "Database Performance",
+                  "charts": [
+                    {
+                      "metrics": [
+                        {
+                          "resourceMetadata": {
+                            "id": "{resource-id}"
+                          },
+                          "name": "active_connections",
+                          "aggregationType": 4,
+                          "metricVisualization": {
+                            "color": "purple"
+                          }
+                        },
+                        {
+                          "resourceMetadata": {
+                            "id": "{resource-id}"
+                          },
+                          "name": "cpu_percent",
+                          "aggregationType": 4,
+                          "metricVisualization": {
+                            "color": "orange"
+                          }
+                        }
+                      ],
+                      "title": "Database Connections and CPU",
+                      "visualization": {
+                        "chartType": 2,
+                        "legendVisualization": {
+                          "isVisible": true,
+                          "position": 2,
+                          "hideSubtitle": false
+                        },
+                        "axisVisualization": {
+                          "x": {
+                            "isVisible": true,
+                            "axisType": 2
+                          },
+                          "y": {
+                            "isVisible": true,
+                            "axisType": 1
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "2": {
+            "position": {
+              "x": 0,
+              "y": 4,
+              "colSpan": 6,
+              "rowSpan": 4
+            },
+            "metadata": {
+              "inputs": [
+                {
+                  "name": "resourceTypeMode",
+                  "value": "workspace"
+                },
+                {
+                  "name": "ComponentId",
+                  "value": {
+                    "Name": "kwelivote-logs",
+                    "ResourceGroup": "kwelivote-rg",
+                    "ResourceType": "Microsoft.OperationalInsights/workspaces"
+                  }
+                },
+                {
+                  "name": "Query",
+                  "value": "traces\n| where customDimensions.operation startswith \"blockchain_\"\n| summarize count() by operation=tostring(customDimensions.operation), status=tostring(customDimensions.status), bin(timestamp, 15m)\n| render timechart"
+                },
+                {
+                  "name": "PartTitle",
+                  "value": "Blockchain Transactions"
+                },
+                {
+                  "name": "PartSubTitle",
+                  "value": "Transaction status over time"
+                },
+                {
+                  "name": "TimeRange",
+                  "value": "P1D"
+                },
+                {
+                  "name": "ControlType",
+                  "value": "FrameControlChart"
+                }
+              ],
+              "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+              "settings": {}
+            }
+          },
+          "3": {
+            "position": {
+              "x": 6,
+              "y": 4,
+              "colSpan": 6,
+              "rowSpan": 4
+            },
+            "metadata": {
+              "inputs": [
+                {
+                  "name": "resourceTypeMode",
+                  "value": "workspace"
+                },
+                {
+                  "name": "ComponentId",
+                  "value": {
+                    "Name": "kwelivote-logs",
+                    "ResourceGroup": "kwelivote-rg",
+                    "ResourceType": "Microsoft.OperationalInsights/workspaces"
+                  }
+                },
+                {
+                  "name": "Query",
+                  "value": "customEvents\n| where name == \"VoterRegistration\"\n| summarize count() by action=tostring(customDimensions.action), bin(timestamp, 1h)\n| render columnchart"
+                },
+                {
+                  "name": "PartTitle",
+                  "value": "Voter Registration Activity"
+                },
+                {
+                  "name": "PartSubTitle",
+                  "value": "Hourly registrations"
+                },
+                {
+                  "name": "TimeRange",
+                  "value": "P1D"
+                },
+                {
+                  "name": "ControlType",
+                  "value": "FrameControlChart"
+                }
+              ],
+              "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+              "settings": {}
+            }
+          },
+          "4": {
+            "position": {
+              "x": 0,
+              "y": 8,
+              "colSpan": 12,
+              "rowSpan": 3
+            },
+            "metadata": {
+              "inputs": [
+                {
+                  "name": "resourceTypeMode",
+                  "value": "workspace"
+                },
+                {
+                  "name": "ComponentId",
+                  "value": {
+                    "Name": "kwelivote-logs",
+                    "ResourceGroup": "kwelivote-rg",
+                    "ResourceType": "Microsoft.OperationalInsights/workspaces"
+                  }
+                },
+                {
+                  "name": "Query",
+                  "value": "// Application errors in the last 24 hours\nexceptions\n| where timestamp > ago(24h)\n| project timestamp, operation_Name, outerMessage, problemId, customDimensions\n| order by timestamp desc"
+                },
+                {
+                  "name": "PartTitle",
+                  "value": "Recent Application Errors"
+                },
+                {
+                  "name": "PartSubTitle",
+                  "value": "Last 24 hours"
+                },
+                {
+                  "name": "TimeRange",
+                  "value": "P1D"
+                },
+                {
+                  "name": "ControlType",
+                  "value": "AnalyticsGrid"
+                }
+              ],
+              "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+              "settings": {}
+            }
+          },
+          "5": {
+            "position": {
+              "x": 0,
+              "y": 11,
+              "colSpan": 12,
+              "rowSpan": 3
+            },
+            "metadata": {
+              "inputs": [
+                {
+                  "name": "resourceTypeMode",
+                  "value": "workspace"
+                },
+                {
+                  "name": "ComponentId",
+                  "value": {
+                    "Name": "kwelivote-logs",
+                    "ResourceGroup": "kwelivote-rg",
+                    "ResourceType": "Microsoft.OperationalInsights/workspaces"
+                  }
+                },
+                {
+                  "name": "Query",
+                  "value": "// Top API endpoints by performance\nrequests\n| where cloud_RoleName == \"kwelivote-api\"\n| where timestamp > ago(24h)\n| summarize count(), avg(duration), percentile(duration, 95), dcount(user_Id) by name\n| order by percentile_duration_95 desc"
+                },
+                {
+                  "name": "PartTitle",
+                  "value": "API Performance"
+                },
+                {
+                  "name": "PartSubTitle",
+                  "value": "Response time by endpoint (last 24 hours)"
+                },
+                {
+                  "name": "TimeRange",
+                  "value": "P1D"
+                },
+                {
+                  "name": "ControlType",
+                  "value": "AnalyticsGrid"
+                }
+              ],
+              "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+              "settings": {}
+            }
+          }
+        }
+      }
+    },
+    "metadata": {
+      "model": {
+        "timeRange": {
+          "value": {
+            "relative": {
+              "duration": 24,
+              "timeUnit": 1
+            }
+          },
+          "type": "MsPortalFx.Composition.Configuration.ValueTypes.TimeRange"
+        },
+        "filterLocale": {
+          "value": "en-us"
+        },
+        "filters": {
+          "value": {
+            "MsPortalFx_TimeRange": {
+              "model": {
+                "format": "utc",
+                "granularity": "auto",
+                "relative": "24h"
+              },
+              "displayCache": {
+                "name": "UTC Time",
+                "value": "Past 24 hours"
+              },
+              "filteredPartIds": [
+                "StartboardPart-LogsDashboardPart-b00650fa-df27-46a7-8ac6-466c66c351bf",
+                "StartboardPart-LogsDashboardPart-b00650fa-df27-46a7-8ac6-466c66c351bf-timeRange"
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  "name": "KweliVoteMonitoring",
+  "type": "Microsoft.Portal/dashboards",
+  "location": "westeurope",
+  "tags": {
+    "hidden-title": "KweliVote Monitoring Dashboard"
+  }
+}
