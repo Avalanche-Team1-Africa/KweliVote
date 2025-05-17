@@ -150,6 +150,9 @@ git reset --soft HEAD~1
 
 # Undo last commit and discard changes
 git reset --hard HEAD~1
+
+git clean -fd           # Deletes untracked files and folders. Use git clean -fdx if you want to remove ignored files too
+git reset --hard HEAD   # Resets tracked files to last commit
 ```
 
 ## Best Practices
