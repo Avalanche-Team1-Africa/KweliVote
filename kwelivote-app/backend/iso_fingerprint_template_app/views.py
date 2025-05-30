@@ -28,6 +28,66 @@ class ProcessFingerprintTemplateView(APIView):
     """
     permission_classes = [IsAuthenticated]
     
+    def _extract_minutiae(self, image_path, output_dir):
+        """Extract minutiae from fingerprint image using MINDTCT"""
+        output_basename = os.path.join(output_dir, "probe")
+        
+        try:
+            # Run MINDTCT to extract minutiae
+            process = subprocess.run(
+                ["mindtct", "-m1", image_path, output_basename], 
+                check=True, 
+                capture_output=True,
+                text=True
+            )
+            logger.info("Successfully processed probe fingerprint with mindtct")
+            
+            # Read the minutiae template file (.xyt format)
+            xyt_path = f"{output_basename}.xyt"
+            if os.path.exists(xyt_path) and os.path.getsize(xyt_path) > 0:
+                with open(xyt_path, 'rb') as f:
+                    xyt_data = f.read()
+                return xyt_data
+            else:
+                raise Exception("XYT file not created or is empty")
+                
+        except subprocess.CalledProcessError as e:
+            error_msg = e.stderr if e.stderr else str(e)
+            logger.error(f"mindtct error (exit code {e.returncode}): {error_msg}")
+            
+            # Try with PGM format
+            try:
+                pgm_path = os.path.join(output_dir, "probe.pgm")
+                logger.info("Trying alternative format conversion for probe fingerprint")
+                
+                subprocess.run([
+                    "convert", image_path, 
+                    "-colorspace", "gray",
+                    "-depth", "8",
+                    pgm_path
+                ], check=True, capture_output=True)
+                
+                process = subprocess.run(
+                    ["mindtct", "-m1", pgm_path, output_basename], 
+                    check=True, 
+                    capture_output=True,
+                    text=True
+                )
+                logger.info("Successfully processed probe fingerprint with PGM format")
+                
+                # Read the minutiae template file (.xyt format)
+                xyt_path = f"{output_basename}.xyt"
+                if os.path.exists(xyt_path) and os.path.getsize(xyt_path) > 0:
+                    with open(xyt_path, 'rb') as f:
+                        xyt_data = f.read()
+                    return xyt_data
+                else:
+                    raise Exception("XYT file not created or is empty after PGM conversion")
+                    
+            except Exception as pgm_error:
+                logger.error(f"PGM conversion/processing failed: {str(pgm_error)}")
+                raise Exception(f"Failed to extract minutiae: {str(pgm_error)}")
+    
     def calculate_circular_mean(self, angles):
         """
         Calculate proper circular mean of angles in degrees
@@ -530,6 +590,41 @@ class ProcessFingerprintTemplateView(APIView):
                         # Update record with template
                         fingerprint_template.iso_template = iso_data
                         fingerprint_template.iso_template_base64 = iso_base64
+                        
+                        # Extract national ID from input JSON if available
+                        if fingerprint_template.input_json and 'nationalId' in fingerprint_template.input_json:
+                            fingerprint_template.national_id = fingerprint_template.input_json['nationalId']
+                        
+                        # Extract XYT data for BOZORTH3 matching
+                        xyt_path = os.path.join(work_dir, "template.xyt")
+                        with open(xyt_path, 'w') as f:
+                            # Extract minutiae from ISO template (each minutia is 6 bytes)
+                            # Skip the 32-byte header
+                            offset = 32
+                            minutiae_count = iso_data[offset-1]  # Get minutiae count from the header
+                            
+                            # Extract minutiae from ISO template (each minutia is 6 bytes)
+                            for i in range(minutiae_count):
+                                idx = offset + (i * 6)
+                                if idx + 6 <= len(iso_data):
+                                    # Extract x, y, and theta from the ISO format
+                                    x_high = iso_data[idx] & 0x7F
+                                    x_low = iso_data[idx+1]
+                                    x = (x_high << 8) | x_low
+                                    
+                                    y_high = iso_data[idx+2] & 0x7F
+                                    y_low = iso_data[idx+3]
+                                    y = (y_high << 8) | y_low
+                                    
+                                    theta = iso_data[idx+4]
+                                    
+                                    # Write in MINDTCT XYT format
+                                    f.write(f"{x} {y} {theta}\n")
+                        
+                        # Read the XYT file and store it in the model
+                        with open(xyt_path, 'rb') as f:
+                            fingerprint_template.xyt_data = f.read()
+                        
                         fingerprint_template.processing_status = 'completed'
                         fingerprint_template.save()
                         

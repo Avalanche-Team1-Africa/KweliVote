@@ -12,4 +12,4 @@ class FingerprintTemplateOutputSerializer(serializers.ModelSerializer):
     """Serializer for fingerprint template processing output"""
     class Meta:
         model = FingerprintTemplate
-        fields = ['id', 'created_at', 'processing_status', 'iso_template_base64', 'error_message']
+        fields = ['id', 'created_at', 'processing_status', 'iso_template_base64', 'error_message', 'national_id', 'metadata']
