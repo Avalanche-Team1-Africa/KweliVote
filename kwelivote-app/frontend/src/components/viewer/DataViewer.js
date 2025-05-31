@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { voterAPI, keypersonAPI } from '../../utils/api';
 import blockchainService from '../../services/BlockchainService';
+import fingerprintService from '../../services/FingerprintService';
 
 const DataViewer = () => {
   const [activeTab, setActiveTab] = useState('voters');
@@ -9,11 +10,20 @@ const DataViewer = () => {
   const [keypersons, setKeypersons] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  
   // Add states for blockchain validation
   const [validatingVoter, setValidatingVoter] = useState(null);
   const [validationResult, setValidationResult] = useState(null);
   const [isBlockchainConnected, setIsBlockchainConnected] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
+  
+  // Add states for fingerprint validation
+  const [showFingerprintModal, setShowFingerprintModal] = useState(false);
+  const [fingerprintImage, setFingerprintImage] = useState(null);
+  const [fingerprintValidating, setFingerprintValidating] = useState(false);
+  const [fingerprintResult, setFingerprintResult] = useState(null);
+  const [validationStep, setValidationStep] = useState(1); // 1 = fingerprint, 2 = blockchain
+  const fingerprintInputRef = useRef(null);
   
   // Initialize blockchain connection when component mounts
   useEffect(() => {
@@ -61,12 +71,92 @@ const DataViewer = () => {
       return;
     }
     
+    // Reset all validation states
     setValidatingVoter(voter);
     setValidationResult(null);
+    setFingerprintResult(null);
+    setFingerprintImage(null);
+    setShowFingerprintModal(true);
+    setValidationStep(1);
+    setError('');
+  };
+  
+  // Handle fingerprint capture and verification
+  const handleFingerprintUpload = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      
+      // Validate file type
+      const acceptedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+      if (!acceptedTypes.includes(file.type)) {
+        setError('Please upload a valid image file (JPEG, PNG, or GIF)');
+        return;
+      }
+      
+      // Validate file size (max 10MB)
+      const maxSize = 10 * 1024 * 1024; // 10MB in bytes
+      if (file.size > maxSize) {
+        setError('File size exceeds 10MB. Please upload a smaller file');
+        return;
+      }
+      
+      setFingerprintImage(file);
+      setError(''); // Clear any previous errors
+    }
+  };
+  
+  // Process fingerprint verification
+  const handleVerifyFingerprint = async () => {
+    if (!fingerprintImage) {
+      setError('Please select a fingerprint image');
+      return;
+    }
+    
+    setFingerprintValidating(true);
+    setError('');
+    
+    try {
+      const nationalId = validatingVoter.nationalid || validatingVoter.national_id;
+      if (!nationalId) {
+        throw new Error('National ID not found for voter');
+      }
+      
+      const result = await fingerprintService.verifyFingerprint(
+        fingerprintImage, 
+        nationalId
+      );
+      
+      setFingerprintResult(result);
+      
+      // If fingerprint matched, proceed to blockchain verification
+      if (result.is_match) {
+        setValidationStep(2);
+        proceedToBlockchainVerification();
+      }
+    } catch (err) {
+      console.error('Error verifying fingerprint:', err);
+      setError(`Failed to verify fingerprint: ${err.message}`);
+    } finally {
+      setFingerprintValidating(false);
+    }
+  };
+  
+  // Proceed to blockchain verification after successful fingerprint verification
+  const proceedToBlockchainVerification = async () => {
+    if (!validatingVoter) {
+      setError('No voter data available for validation');
+      return;
+    }
+    
     setIsValidating(true);
     
     try {
-      const result = await blockchainService.verifyVoterDID(voter.nationalid || voter.national_id);
+      const nationalId = validatingVoter.nationalid || validatingVoter.national_id;
+      if (!nationalId) {
+        throw new Error('National ID not found for voter');
+      }
+      
+      const result = await blockchainService.verifyVoterDID(nationalId);
       setValidationResult(result);
     } catch (err) {
       console.error('Error verifying voter DID:', err);
@@ -76,10 +166,20 @@ const DataViewer = () => {
     }
   };
   
-  // Clear validation states
+  // Clear validation states and close modal
   const handleCloseValidation = () => {
     setValidatingVoter(null);
     setValidationResult(null);
+    setFingerprintResult(null);
+    setFingerprintImage(null);
+    setShowFingerprintModal(false);
+    setValidationStep(1);
+  };
+  
+  // Skip fingerprint verification for testing purposes
+  const handleSkipFingerprint = () => {
+    setValidationStep(2);
+    proceedToBlockchainVerification();
   };
 
   const filteredVoters = voters.filter(voter => {
@@ -341,137 +441,269 @@ const DataViewer = () => {
       {validatingVoter && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
           <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
-            <h3 className="text-lg font-bold text-kweli-dark mb-4">Blockchain DID Validation</h3>
-            {isValidating ? (
-              <div className="flex flex-col items-center justify-center py-10">
-                <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-kweli-primary mb-4"></div>
-                <p className="text-sm text-gray-600">Validating voter identity on blockchain...</p>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-kweli-dark">
+                {validationStep === 1 ? 'Step 1: Biometric Verification' : 'Step 2: Blockchain DID Validation'}
+              </h3>
+              <div className="flex space-x-1">
+                <div className={`w-3 h-3 rounded-full ${validationStep === 1 ? 'bg-kweli-primary' : 'bg-gray-300'}`}></div>
+                <div className={`w-3 h-3 rounded-full ${validationStep === 2 ? 'bg-kweli-primary' : 'bg-gray-300'}`}></div>
               </div>
-            ) : validationResult ? (
-              <div>
-                <div className="mb-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="text-md font-medium text-gray-800">Validation Status:</h4>
-                    {validationResult.isVerified ? (
-                      <div className="flex items-center text-green-600">
-                        <svg className="h-6 w-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                        <span className="font-medium">Verified</span>
+            </div>
+            
+            {validationStep === 1 && (
+              <div className="animate-fade-in">
+                <div className="mb-4">
+                  <p className="text-sm text-gray-600 mb-4">
+                    Please upload a fingerprint image for biometric verification:
+                  </p>
+                  
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-kweli-primary transition-colors duration-200">
+                    <input
+                      type="file"
+                      ref={fingerprintInputRef}
+                      onChange={handleFingerprintUpload}
+                      accept="image/*"
+                      className="hidden"
+                    />
+                    
+                    {fingerprintImage ? (
+                      <div>
+                        <div className="mb-3 w-32 h-32 mx-auto border border-gray-200 rounded-lg overflow-hidden">
+                          <img 
+                            src={URL.createObjectURL(fingerprintImage)} 
+                            alt="Fingerprint" 
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <p className="text-sm text-green-600 mb-2">Fingerprint image selected</p>
+                        <button
+                          onClick={() => fingerprintInputRef.current.click()}
+                          className="text-xs text-kweli-primary hover:text-kweli-secondary underline transition-colors duration-200"
+                        >
+                          Choose a different image
+                        </button>
                       </div>
                     ) : (
-                      <div className="flex items-center text-red-600">
-                        <svg className="h-6 w-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                      <div 
+                        onClick={() => fingerprintInputRef.current.click()}
+                        className="cursor-pointer"
+                      >
+                        <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                         </svg>
-                        <span className="font-medium">Not Verified</span>
+                        <p className="mt-2 text-sm text-gray-500">Click to upload fingerprint image</p>
+                        <p className="mt-1 text-xs text-gray-400">PNG, JPG, or GIF up to 10MB</p>
                       </div>
                     )}
                   </div>
-                  
-                  <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                    <h5 className="text-sm font-medium text-gray-600 mb-2">National ID:</h5>
-                    <p className="text-sm font-mono bg-white p-2 rounded border border-gray-200">
-                      {validatingVoter.nationalid || validatingVoter.national_id}
-                    </p>
-                  </div>
-
-                  <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                    <h5 className="text-sm font-medium text-gray-600 mb-2">Database DID:</h5>
-                    <p className="text-sm font-mono bg-white p-2 rounded border border-gray-200 break-all">
-                      {validatingVoter.did || 'No DID stored in database'}
-                    </p>
-                  </div>
-
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <h5 className="text-sm font-medium text-gray-600 mb-2">Blockchain DID:</h5>
-                    <p className="text-sm font-mono bg-white p-2 rounded border border-gray-200 break-all">
-                      {validationResult.did ? (
-                        <>
-                          {validationResult.did}
-                          
-                          {/* Always display transaction section when DID is verified */}
-                          <div className="mt-3 pt-2 border-t border-gray-200">
-                            <h6 className="text-xs font-medium text-gray-500 mb-2">Transaction Details:</h6>
-                            
-                            {validationResult.transactionInfo ? (
-                              <>
-                                <p className="text-xs mb-1">
-                                  <span className="font-semibold">Event:</span> {validationResult.transactionInfo.eventName}
-                                </p>
-                                {validationResult.transactionInfo.timestamp && (
-                                  <p className="text-xs mb-1">
-                                    <span className="font-semibold">Time:</span> {new Date(validationResult.transactionInfo.timestamp).toLocaleString()}
-                                  </p>
-                                )}
-                                <p className="text-xs mb-2">
-                                  <span className="font-semibold">Transaction Hash:</span> 
-                                  <span className="font-mono text-xs break-all">
-                                    {validationResult.transactionInfo.hash.substring(0, 10)}...{validationResult.transactionInfo.hash.substring(validationResult.transactionInfo.hash.length - 8)}
-                                  </span>
-                                </p>
-                                <a 
-                                  href={`https://testnet.avascan.info/blockchain/c/tx/${validationResult.transactionInfo.hash}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center px-3 py-1.5 bg-kweli-primary text-white text-sm font-medium rounded-md hover:bg-kweli-secondary transition-colors duration-200"
-                                  title="View transaction on Avalanche Explorer"
-                                >
-                                  <svg className="mr-1.5 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                  </svg>
-                                  View Transaction on Avascan
-                                </a>
-                              </>
-                            ) : (
-                              // When DID is verified but transaction info not available,
-                              // still provide a link to view the contract with DID information
-                              <div className="flex flex-col">
-                                <p className="text-xs mb-2 text-amber-600">
-                                  DID verified on blockchain but transaction details could not be found.
-                                </p>
-                                <p className="text-xs mb-3">
-                                  You can still view this record on the blockchain explorer.
-                                </p>
-                                <a 
-                                  href={`https://testnet.avascan.info/blockchain/c/address/${blockchainService.voterDIDContractAddress}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center px-3 py-1.5 bg-kweli-primary text-white text-sm font-medium rounded-md hover:bg-kweli-secondary transition-colors duration-200"
-                                  title="View contract on Avalanche Explorer"
-                                >
-                                  <svg className="mr-1.5 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                  </svg>
-                                  View Contract on Avascan
-                                </a>
-                              </div>
-                            )}
-                          </div>
-                        </>
-                      ) : 'No DID found on blockchain'}
-                    </p>
-                  </div>
                 </div>
                 
-                <div className="flex justify-center">
+                {fingerprintValidating ? (
+                  <div className="flex flex-col items-center justify-center py-6">
+                    <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-kweli-primary mb-4"></div>
+                    <p className="text-sm text-gray-600">Verifying fingerprint...</p>
+                  </div>
+                ) : fingerprintResult ? (
+                  <div className="mb-6 p-4 rounded-lg bg-gray-50">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-md font-medium text-gray-800">Fingerprint Result:</h4>
+                      {fingerprintResult.is_match ? (
+                        <div className="flex items-center text-green-600">
+                          <svg className="h-6 w-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                          </svg>
+                          <span className="font-medium">Match</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center text-red-600">
+                          <svg className="h-6 w-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                          </svg>
+                          <span className="font-medium">No Match</span>
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-600">Match score: {fingerprintResult.match_score}</p>
+                    
+                    {!fingerprintResult.is_match && (
+                      <div className="mt-2 p-2 bg-red-50 text-red-600 text-sm rounded">
+                        Fingerprint verification failed. Please try again or contact support.
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+                
+                    <div className="flex justify-between">
                   <button
                     onClick={handleCloseValidation}
-                    className="px-5 py-2 text-sm font-medium text-white bg-kweli-primary rounded-lg shadow-soft hover:bg-kweli-secondary transition-all duration-200"
+                    className="px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all duration-200"
                   >
-                    Close
+                    Cancel
                   </button>
+                  
+                  <div className="flex space-x-2">
+                    {process.env.NODE_ENV === 'development' && (
+                      <button
+                        onClick={handleSkipFingerprint}
+                        className="px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all duration-200"
+                      >
+                        Skip (Debug)
+                      </button>
+                    )}
+                    
+                    <button
+                      onClick={handleVerifyFingerprint}
+                      disabled={!fingerprintImage || fingerprintValidating}
+                      className={`px-5 py-2 text-sm font-medium text-white rounded-lg shadow-soft transition-all duration-200 ${
+                        !fingerprintImage || fingerprintValidating
+                          ? 'bg-gray-400 cursor-not-allowed'
+                          : 'bg-kweli-primary hover:bg-kweli-secondary'
+                      }`}
+                    >
+                      Verify Fingerprint
+                    </button>
+                  </div>
                 </div>
               </div>
-            ) : (
-              <div className="text-center">
-                <p className="text-sm text-gray-700 mb-4">No validation result available.</p>
-                <button
-                  onClick={handleCloseValidation}
-                  className="px-4 py-2 text-sm font-medium text-white bg-kweli-primary rounded-lg shadow-soft hover:bg-kweli-secondary transition-all duration-200"
-                >
-                  Close
-                </button>
+            )}
+            
+            {validationStep === 2 && (
+              <div className="animate-fade-in">
+                <h4 className="text-md font-medium text-gray-800 mb-3">Blockchain Verification</h4>
+                
+                {isValidating ? (
+                  <div className="flex flex-col items-center justify-center py-10">
+                    <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-kweli-primary mb-4"></div>
+                    <p className="text-sm text-gray-600">Validating voter identity on blockchain...</p>
+                  </div>
+                ) : validationResult ? (
+                  <div>
+                    <div className="mb-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-md font-medium text-gray-800">Validation Status:</h4>
+                        {validationResult.isVerified ? (
+                          <div className="flex items-center text-green-600">
+                            <svg className="h-6 w-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <span className="font-medium">Verified</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center text-red-600">
+                            <svg className="h-6 w-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <span className="font-medium">Not Verified</span>
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                        <h5 className="text-sm font-medium text-gray-600 mb-2">National ID:</h5>
+                        <p className="text-sm font-mono bg-white p-2 rounded border border-gray-200">
+                          {validatingVoter.nationalid || validatingVoter.national_id}
+                        </p>
+                      </div>
+
+                      <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                        <h5 className="text-sm font-medium text-gray-600 mb-2">Database DID:</h5>
+                        <p className="text-sm font-mono bg-white p-2 rounded border border-gray-200 break-all">
+                          {validatingVoter.did || 'No DID stored in database'}
+                        </p>
+                      </div>
+
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <h5 className="text-sm font-medium text-gray-600 mb-2">Blockchain DID:</h5>
+                        <p className="text-sm font-mono bg-white p-2 rounded border border-gray-200 break-all">
+                          {validationResult.did ? (
+                            <>
+                              {validationResult.did}
+                              
+                              {/* Always display transaction section when DID is verified */}
+                              <div className="mt-3 pt-2 border-t border-gray-200">
+                                <h6 className="text-xs font-medium text-gray-500 mb-2">Transaction Details:</h6>
+                                
+                                {validationResult.transactionInfo ? (
+                                  <>
+                                    <p className="text-xs mb-1">
+                                      <span className="font-semibold">Event:</span> {validationResult.transactionInfo.eventName}
+                                    </p>
+                                    {validationResult.transactionInfo.timestamp && (
+                                      <p className="text-xs mb-1">
+                                        <span className="font-semibold">Time:</span> {new Date(validationResult.transactionInfo.timestamp).toLocaleString()}
+                                      </p>
+                                    )}
+                                    <p className="text-xs mb-2">
+                                      <span className="font-semibold">Transaction Hash:</span> 
+                                      <span className="font-mono text-xs break-all">
+                                        {validationResult.transactionInfo.hash.substring(0, 10)}...{validationResult.transactionInfo.hash.substring(validationResult.transactionInfo.hash.length - 8)}
+                                      </span>
+                                    </p>
+                                    <a 
+                                      href={`https://testnet.avascan.info/blockchain/c/tx/${validationResult.transactionInfo.hash}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center px-3 py-1.5 bg-kweli-primary text-white text-sm font-medium rounded-md hover:bg-kweli-secondary transition-colors duration-200"
+                                      title="View transaction on Avalanche Explorer"
+                                    >
+                                      <svg className="mr-1.5 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                      </svg>
+                                      View Transaction on Avascan
+                                    </a>
+                                  </>
+                                ) : (
+                                  // When DID is verified but transaction info not available,
+                                  // still provide a link to view the contract with DID information
+                                  <div className="flex flex-col">
+                                    <p className="text-xs mb-2 text-amber-600">
+                                      DID verified on blockchain but transaction details could not be found.
+                                    </p>
+                                    <p className="text-xs mb-3">
+                                      You can still view this record on the blockchain explorer.
+                                    </p>
+                                    <a 
+                                      href={`https://testnet.avascan.info/blockchain/c/address/${blockchainService.voterDIDContractAddress}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center px-3 py-1.5 bg-kweli-primary text-white text-sm font-medium rounded-md hover:bg-kweli-secondary transition-colors duration-200"
+                                      title="View contract on Avalanche Explorer"
+                                    >
+                                      <svg className="mr-1.5 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                      </svg>
+                                      View Contract on Avascan
+                                    </a>
+                                  </div>
+                                )}
+                              </div>
+                            </>
+                          ) : 'No DID found on blockchain'}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-center">
+                      <button
+                        onClick={handleCloseValidation}
+                        className="px-5 py-2 text-sm font-medium text-white bg-kweli-primary rounded-lg shadow-soft hover:bg-kweli-secondary transition-all duration-200"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center">
+                    <p className="text-sm text-gray-700 mb-4">No validation result available.</p>
+                    <button
+                      onClick={handleCloseValidation}
+                      className="px-4 py-2 text-sm font-medium text-white bg-kweli-primary rounded-lg shadow-soft hover:bg-kweli-secondary transition-all duration-200"
+                    >
+                      Close
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

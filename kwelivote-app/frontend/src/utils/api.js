@@ -1,5 +1,10 @@
+import { getAuthToken, setAuthToken, removeAuthToken } from './auth';
+
 // API Base URL - should match with your Django backend
 const API_BASE_URL = 'http://127.0.0.1:8000/api';
+
+// Export the API_BASE_URL for other services to use
+export { API_BASE_URL };
 
 // Helper for handling API errors
 const handleApiError = (error) => {
@@ -41,7 +46,13 @@ export const authAPI = {
         throw { response: { status: response.status, data: errorData } };
       }
       
-      return await response.json();
+      const data = await response.json();
+      // Store the token in localStorage
+      if (data.access) {
+        setAuthToken(data.access);
+      }
+      
+      return data;
     } catch (error) {
       throw handleApiError(error);
     }
