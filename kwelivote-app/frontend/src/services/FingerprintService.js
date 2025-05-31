@@ -97,6 +97,59 @@ class FingerprintService {
       throw error;
     }
   }
+  
+  /**
+   * Verify a fingerprint using a template instead of an image
+   * @param {string} template - The fingerprint template data (base64 encoded)
+   * @param {string} nationalId - The national ID to match against
+   * @param {number} threshold - Optional matching threshold (default: 40)
+   * @returns {Promise<Object>} - The verification result
+   */
+  async verifyFingerprintTemplate(template, nationalId, threshold = 40) {
+    if (!template) {
+      throw new Error('Fingerprint template is required');
+    }
+    
+    if (!nationalId) {
+      throw new Error('National ID is required');
+    }
+    
+    try {
+      // Create a data object with the template and national ID
+      const requestData = {
+        template: template,
+        national_id: nationalId,
+        threshold: threshold,
+        is_template_data: true
+      };
+      
+      // Get the authentication token
+      const token = getAuthToken();
+      if (!token) {
+        throw new Error('Authentication token not found. Please log in again.');
+      }
+      
+      // Make the API request
+      const response = await fetch(`${API_BASE_URL}/fingerprints/verify-fingerprint-template/`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestData)
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to verify fingerprint template: ${response.status}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error verifying fingerprint template:', error);
+      throw error;
+    }
+  }
 }
 
 export default new FingerprintService();

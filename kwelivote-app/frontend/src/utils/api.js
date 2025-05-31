@@ -548,6 +548,20 @@ export const fingerprintAPI = {
       'POST',
       template
     );
+  },
+  
+  // Verify fingerprint using template data
+  async verifyFingerprintTemplate(template, nationalId, threshold = 40) {
+    return authenticatedRequest(
+      `${API_BASE_URL}/fingerprints/verify-fingerprint-template/`,
+      'POST',
+      {
+        template: template,
+        national_id: nationalId,
+        threshold: threshold,
+        is_template_data: true
+      }
+    );
   }
 };
 
