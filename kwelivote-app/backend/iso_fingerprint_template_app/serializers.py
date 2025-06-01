@@ -7,6 +7,11 @@ class FingerprintTemplateInputSerializer(serializers.Serializer):
         child=serializers.DictField(),
         required=True
     )
+    nationalId = serializers.CharField(
+        required=True,
+        max_length=50,
+        help_text="National ID for the person these fingerprints belong to"
+    )
     
 class FingerprintTemplateOutputSerializer(serializers.ModelSerializer):
     """Serializer for fingerprint template processing output"""

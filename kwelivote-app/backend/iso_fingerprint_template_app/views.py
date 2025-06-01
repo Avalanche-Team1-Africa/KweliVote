@@ -345,10 +345,21 @@ class ProcessFingerprintTemplateView(APIView):
         
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Validate that nationalId is present in the input data
+        if not serializer.validated_data.get('nationalId'):
+            logger.error("Missing required nationalId in fingerprint template data")
+            return Response(
+                {'error': 'National ID is required', 'detail': 'The nationalId field is mandatory for fingerprint processing'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        logger.info(f"Processing fingerprint template for national ID: {serializer.validated_data.get('nationalId')}")
             
         # Create database record
         fingerprint_template = FingerprintTemplate.objects.create(
             input_json=serializer.validated_data,
+            national_id=serializer.validated_data.get('nationalId'),  # Set national_id from input directly
             processing_status='processing'
         )
         
@@ -356,10 +367,12 @@ class ProcessFingerprintTemplateView(APIView):
             # Create temporary working directory
             with tempfile.TemporaryDirectory() as work_dir:
                 fingerprints = serializer.validated_data.get('fingerprints', [])
+                logger.info(f"Processing {len(fingerprints)} fingerprint images for national ID: {fingerprint_template.national_id}")
                 xyt_paths = []
                 
                 # Check if NBIS tools are available
                 if not (shutil.which('mindtct')):
+                    logger.error("NBIS tool 'mindtct' is not available in the system PATH")
                     raise Exception("NBIS tool 'mindtct' is not available in the system PATH")
                 
                 # Process each fingerprint
@@ -591,9 +604,8 @@ class ProcessFingerprintTemplateView(APIView):
                         fingerprint_template.iso_template = iso_data
                         fingerprint_template.iso_template_base64 = iso_base64
                         
-                        # Extract national ID from input JSON if available
-                        if fingerprint_template.input_json and 'nationalId' in fingerprint_template.input_json:
-                            fingerprint_template.national_id = fingerprint_template.input_json['nationalId']
+                        # National ID should already be set during record creation
+                        logger.info(f"Processing template for national ID: {fingerprint_template.national_id}")
                         
                         # Extract XYT data for BOZORTH3 matching
                         xyt_path = os.path.join(work_dir, "template.xyt")

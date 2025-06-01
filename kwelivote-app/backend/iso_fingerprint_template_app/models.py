@@ -10,7 +10,7 @@ class FingerprintTemplate(models.Model):
     processing_status = models.CharField(max_length=50, default='pending')
     error_message = models.TextField(null=True, blank=True)
     metadata = models.JSONField(null=True, blank=True, help_text="Helper data for template fusion and verification")
-    national_id = models.CharField(max_length=50, null=True, blank=True, db_index=True, help_text="National ID for the person this fingerprint belongs to")
+    national_id = models.CharField(max_length=50, null=False, blank=False, db_index=True, help_text="National ID for the person this fingerprint belongs to")
     xyt_data = models.BinaryField(null=True, blank=True, help_text="Raw MINDTCT XYT data for use with BOZORTH3")
     
     def __str__(self):

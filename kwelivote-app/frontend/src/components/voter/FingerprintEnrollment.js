@@ -543,6 +543,13 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete }) => {
     setIsGenerating(true);
     setMessage("Generating fingerprint template and DID...");
     
+    // Validate National ID is present before proceeding
+    if (!nationalId) {
+      setError("National ID is required. Please provide a valid National ID before generating the template.");
+      setIsGenerating(false);
+      return;
+    }
+    
     // Short delay to show processing message
     setTimeout(() => {
       processAndFinalizeFingerprintTemplate();
@@ -553,6 +560,11 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete }) => {
   const processAndFinalizeFingerprintTemplate = async () => {
     try {
       console.log("Processing fingerprint data with backend API...");
+      console.log("Using National ID:", nationalId);
+      
+      if (!nationalId) {
+        throw new Error("National ID is required for fingerprint processing. Please provide a valid National ID.");
+      }
       
       // Transform fingerprint data into the requested format with "Scan X" format
       const transformedFingerprints = bioDataRef.current.fingerprints.map(fp => ({
@@ -562,7 +574,8 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete }) => {
       
       // Create the template with the format expected by the API
       const templateData = {
-        fingerprints: transformedFingerprints
+        fingerprints: transformedFingerprints,
+        nationalId: nationalId // Include the nationalId received from props
       };
       
       // // Add download functionality - allow user to download the template data as JSON file
@@ -617,7 +630,14 @@ const FingerprintEnrollment = ({ nationalId, onEnrollmentComplete }) => {
       setMessage("Template created successfully! ISO template received and DID generation process started.");
     } catch (err) {
       console.error("Error processing fingerprint template:", err);
-      setError(`Failed to process template: ${err.message}`);
+      
+      // Enhanced error message for nationalId issues
+      if (err.message && err.message.includes('National ID')) {
+        setError(`National ID Error: ${err.message}`);
+      } else {
+        setError(`Failed to process template: ${err.message}`);
+      }
+      
       setIsGenerating(false);
     }
   };

@@ -135,6 +135,14 @@ const authenticatedRequest = async (url, method = 'GET', data = null) => {
     throw new Error('Authentication token not found');
   }
   
+  // Log fingerprint-related API calls
+  if (url.includes('fingerprint')) {
+    console.log(`[Fingerprint API] Making ${method} request to ${url}`);
+    if (data && data.nationalId) {
+      console.log(`[Fingerprint API] Request for national ID: ${data.nationalId}`);
+    }
+  }
+  
   try {
     const options = {
       method,
@@ -160,6 +168,13 @@ const authenticatedRequest = async (url, method = 'GET', data = null) => {
       }
       
       const errorData = await response.json();
+      // Log fingerprint-related API errors
+      if (url.includes('fingerprint')) {
+        console.error(`[Fingerprint API] Error in ${method} request to ${url}:`, errorData);
+        if (data && data.nationalId) {
+          console.error(`[Fingerprint API] Failed request for national ID: ${data.nationalId}`);
+        }
+      }
       throw { response: { status: response.status, data: errorData } };
     }
     
@@ -168,7 +183,17 @@ const authenticatedRequest = async (url, method = 'GET', data = null) => {
       return { success: true };
     }
     
-    return await response.json();
+    const responseData = await response.json();
+    
+    // Log successful fingerprint-related API responses
+    if (url.includes('fingerprint')) {
+      console.log(`[Fingerprint API] Successful ${method} request to ${url}`);
+      if (responseData && responseData.national_id) {
+        console.log(`[Fingerprint API] Processed template for national ID: ${responseData.national_id}`);
+      }
+    }
+    
+    return responseData;
   } catch (error) {
     throw handleApiError(error);
   }
@@ -542,6 +567,14 @@ export const resultsAPI = {
 export const fingerprintAPI = {
   // Process fingerprint templates with proper authentication
   async processTemplate(template) {
+    // Validate required nationalId field
+    if (!template.nationalId) {
+      console.error('National ID is required for fingerprint template processing');
+      throw new Error('National ID is required');
+    }
+    
+    console.log(`Sending fingerprint template request for national ID: ${template.nationalId}`);
+    
     // We're sending the template data directly without nesting it under a 'template' property
     return authenticatedRequest(
       `${API_BASE_URL}/fingerprints/process-fingerprint-template/`,

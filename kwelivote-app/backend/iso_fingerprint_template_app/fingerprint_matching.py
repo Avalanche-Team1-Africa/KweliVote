@@ -291,13 +291,20 @@ class IdentifyFingerprintView(APIView):
                     
                     # If score exceeds threshold, add to matches
                     if match_score >= threshold:
-                        # Extract template information from input_json if available
-                        template_info = {}
+                        # Get the national_id from the template (now guaranteed to be present)
+                        template_info = {
+                            'national_id': template.national_id,
+                            'match_score': match_score,
+                            'template_id': template.id
+                        }
+                        
+                        # Add additional info from input_json if available
                         if template.input_json and isinstance(template.input_json, dict):
-                            if 'nationalId' in template.input_json:
-                                template_info['national_id'] = template.input_json['nationalId']
                             if 'voterName' in template.input_json:
                                 template_info['voter_name'] = template.input_json['voterName']
+                                
+                        logger.info(f"Found fingerprint match for national ID: {template.national_id} with score: {match_score}")
+                        matches.append(template_info)
                         
                         matches.append({
                             'template_id': template.id,
