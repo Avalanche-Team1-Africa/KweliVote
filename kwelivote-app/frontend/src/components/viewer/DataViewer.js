@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { voterAPI, keypersonAPI } from '../../utils/api';
 import blockchainService from '../../services/BlockchainService';
-import FingerprintEnrollment from '../voter/FingerprintEnrollment';
+import FingerprintEnrollmentForDataViewer from './FingerprintEnrollmentForDataViewer';
 
 // Debug logger for fingerprint operations - helps with troubleshooting
 const logFingerprintDebug = (message, data = null) => {
@@ -137,8 +137,10 @@ const DataViewer = () => {
   
   // Handler for when enrollment completes (from FingerprintEnrollment)
   const handleEnrollmentComplete = (template) => {
+    // Only store the first scan, do not generate DID or process further
     setFingerprintTemplate(template);
     setFingerprintError('');
+    // No extra processing or DID generation
   };
 
   // Handler for errors from FingerprintEnrollment
@@ -505,9 +507,8 @@ const DataViewer = () => {
                   
                   {useReader ? (
                     <div className="mb-4">
-                      <FingerprintEnrollment
-                        nationalId={validatingVoter?.nationalid || validatingVoter?.national_id}
-                        onEnrollmentComplete={handleEnrollmentComplete}
+                      <FingerprintEnrollmentForDataViewer
+                        onScanComplete={handleEnrollmentComplete}
                         onError={handleEnrollmentError}
                       />
                       {fingerprintError && <div className="mt-2 text-red-600 text-sm">{fingerprintError}</div>}
