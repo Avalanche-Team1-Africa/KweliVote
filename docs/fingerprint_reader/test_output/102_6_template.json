@@ -1,0 +1,10 @@
+{
+  "iso_template_base64": "RU5ST0xMTUVOVF9URU1QTEFURV8xMDJfNi50aWY=",
+  "xyt_data": "RU5ST0xMTUVOVF9YWVRfREFUQV8xMDJfNi50aWY=",
+  "metadata": {
+    "template_version": "1.0",
+    "creation_method": "enrollment",
+    "minutiae_count": 32,
+    "template_hash": "29459733fdf854d4973905c5c19b823f"
+  }
+}

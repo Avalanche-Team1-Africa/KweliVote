@@ -312,6 +312,66 @@ bozorth3 fingerprint1.xyt fingerprint2.xyt
 4. Access the frontend at http://localhost:3000
 5. Login with created user credentials to test the appropriate workflows
 
+## Testing Fingerprint Processing
+
+KweliVote uses fingerprint biometrics for secure voter identification. It's critical to ensure that template generation is consistent between enrollment and verification processes.
+
+### Running Fingerprint Tests
+
+1. **With API Server Running:**
+   ```bash
+   # Make sure the Django backend server is running first
+   cd kwelivote-app/backend
+   python manage.py runserver
+   
+   # In a separate terminal, run the fingerprint test script
+   python3 test_fingerprint_processing.py
+   ```
+
+2. **Using the Test Script Helper:**
+   ```bash
+   # The helper script will start the server if needed
+   ./run_fingerprint_tests.sh
+   
+   # Or run in offline mode without starting a backend server
+   ./run_fingerprint_tests.sh offline
+   ```
+
+3. **In Offline Mode (for Development/Testing):**
+   ```bash
+   # Run in offline mode to simulate API responses
+   python3 test_fingerprint_processing.py --offline
+   ```
+   The offline mode is useful for:
+   - Development environments without a running backend
+   - Demonstrating the test functionality in presentations
+   - Validating the test script logic itself
+   - CI/CD pipelines where starting a full backend isn't practical
+
+   In offline mode, the script simulates API responses and deliberately creates both matching and non-matching templates to demonstrate the detection capabilities.
+
+### What the Tests Verify
+
+The fingerprint test script verifies:
+
+1. **Template Consistency**: Ensures that fingerprint template generation is identical during both enrollment and verification phases.
+2. **Self-Matching**: Verifies that a fingerprint can be successfully matched against its own template.
+3. **API Integration**: Tests the full API workflow for fingerprint processing.
+
+### Test Output
+
+The test results will be saved in the `docs/fingerprint_reader/test_output` directory, including:
+- Enrollment templates
+- Verification templates 
+- Match results
+
+### Troubleshooting
+
+If tests fail, check:
+- Backend server is running and accessible
+- NBIS tools (mindtct, bozorth3) are properly installed (see [Installing Biometric Processing Tools](#installing-biometric-processing-tools))
+- Sample fingerprint images exist in the expected directory
+
 ## Security Considerations
 
 - All biometric processing happens client-side

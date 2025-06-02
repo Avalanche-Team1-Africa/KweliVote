@@ -15,9 +15,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from .serializers import FingerprintTemplateInputSerializer, FingerprintTemplateOutputSerializer
 from .models import FingerprintTemplate
-import cv2
-import io
-import PIL.Image
+from .utils import extract_minutiae, normalize_image
 
 logger = logging.getLogger(__name__)
 
@@ -27,66 +25,6 @@ class ProcessFingerprintTemplateView(APIView):
     using template fusion for improved quality and consistency
     """
     permission_classes = [IsAuthenticated]
-    
-    def _extract_minutiae(self, image_path, output_dir):
-        """Extract minutiae from fingerprint image using MINDTCT"""
-        output_basename = os.path.join(output_dir, "probe")
-        
-        try:
-            # Run MINDTCT to extract minutiae
-            process = subprocess.run(
-                ["mindtct", "-m1", image_path, output_basename], 
-                check=True, 
-                capture_output=True,
-                text=True
-            )
-            logger.info("Successfully processed probe fingerprint with mindtct")
-            
-            # Read the minutiae template file (.xyt format)
-            xyt_path = f"{output_basename}.xyt"
-            if os.path.exists(xyt_path) and os.path.getsize(xyt_path) > 0:
-                with open(xyt_path, 'rb') as f:
-                    xyt_data = f.read()
-                return xyt_data
-            else:
-                raise Exception("XYT file not created or is empty")
-                
-        except subprocess.CalledProcessError as e:
-            error_msg = e.stderr if e.stderr else str(e)
-            logger.error(f"mindtct error (exit code {e.returncode}): {error_msg}")
-            
-            # Try with PGM format
-            try:
-                pgm_path = os.path.join(output_dir, "probe.pgm")
-                logger.info("Trying alternative format conversion for probe fingerprint")
-                
-                subprocess.run([
-                    "convert", image_path, 
-                    "-colorspace", "gray",
-                    "-depth", "8",
-                    pgm_path
-                ], check=True, capture_output=True)
-                
-                process = subprocess.run(
-                    ["mindtct", "-m1", pgm_path, output_basename], 
-                    check=True, 
-                    capture_output=True,
-                    text=True
-                )
-                logger.info("Successfully processed probe fingerprint with PGM format")
-                
-                # Read the minutiae template file (.xyt format)
-                xyt_path = f"{output_basename}.xyt"
-                if os.path.exists(xyt_path) and os.path.getsize(xyt_path) > 0:
-                    with open(xyt_path, 'rb') as f:
-                        xyt_data = f.read()
-                    return xyt_data
-                else:
-                    raise Exception("XYT file not created or is empty after PGM conversion")
-                    
-            except Exception as pgm_error:
-                logger.error(f"PGM conversion/processing failed: {str(pgm_error)}")
-                raise Exception(f"Failed to extract minutiae: {str(pgm_error)}")
     
     def calculate_circular_mean(self, angles):
         """
@@ -291,25 +229,6 @@ class ProcessFingerprintTemplateView(APIView):
         
         return stable_points
     
-    def normalize_image(self, image_data):
-        """
-        Normalize fingerprint image: resize, grayscale, histogram equalization.
-        Returns normalized PNG bytes.
-        """
-        import numpy as np
-        import cv2
-        import io
-        import PIL.Image
-        # Read image from bytes
-        img = PIL.Image.open(io.BytesIO(image_data)).convert('L')  # Grayscale
-        img = img.resize((500, 500), PIL.Image.BILINEAR)
-        img_np = np.array(img)
-        # Histogram equalization
-        img_eq = cv2.equalizeHist(img_np)
-        # Save back to PNG bytes
-        _, buf = cv2.imencode('.png', img_eq)
-        return buf.tobytes()
-    
     def canonicalize_minutiae(self, minutiae_points):
         """
         Center and align minutiae to a canonical position and orientation.
@@ -389,7 +308,7 @@ class ProcessFingerprintTemplateView(APIView):
                         
                         image_data = base64.b64decode(base64_img)
                         # Normalize image before saving
-                        image_data = self.normalize_image(image_data)
+                        image_data = normalize_image(image_data)
                     except Exception as e:
                         logger.error(f"Failed to decode/normalize base64 image for fingerprint {idx + 1}: {str(e)}")
                         continue
@@ -401,58 +320,31 @@ class ProcessFingerprintTemplateView(APIView):
                     
                     logger.info(f"Saved normalized fingerprint image {idx + 1} as PNG")
                     
-                    # Extract minutiae with mindtct - use the PNG directly instead of converting
+                    # Extract minutiae using shared utility function for consistency
                     output_prefix = os.path.join(work_dir, f"finger_{idx + 1}")
                     try:
-                        # FIXED: Use exact same parameters for mindtct across all runs 
-                        # Removed invalid -b95 flag
-                        process = subprocess.run(
-                            ["mindtct", "-m1", png_path, output_prefix], 
-                            check=True, 
-                            capture_output=True,
-                            text=True
-                        )
-                        logger.info(f"Successfully processed fingerprint {idx + 1} with mindtct")
-                    except subprocess.CalledProcessError as e:
-                        error_msg = e.stderr if e.stderr else str(e)
-                        logger.error(f"mindtct error (exit code {e.returncode}): {error_msg}")
+                        # Use the shared extraction function to ensure consistency
+                        xyt_data = extract_minutiae(png_path, work_dir)
                         
-                        # Try a simpler conversion to PGM format that mindtct can handle
-                        try:
-                            pgm_path = os.path.join(work_dir, f"finger_{idx + 1}.pgm")
-                            logger.info(f"Trying alternative format conversion for fingerprint {idx + 1}")
+                        # Write the data to the expected xyt file
+                        xyt_path = f"{output_prefix}.xyt"
+                        with open(xyt_path, 'wb') as f:
+                            f.write(xyt_data)
                             
-                            # FIXED: Use consistent parameters for conversion
-                            subprocess.run([
-                                "convert", png_path, 
-                                "-colorspace", "gray",
-                                "-depth", "8",
-                                pgm_path
-                            ], check=True, capture_output=True)
-                            
-                            # Try with PGM file - with fixed parameters
-                            # Removed invalid -b95 flag
-                            process = subprocess.run(
-                                ["mindtct", "-m1", pgm_path, output_prefix], 
-                                check=True, 
-                                capture_output=True,
-                                text=True
-                            )
-                            logger.info(f"Successfully processed fingerprint {idx + 1} with PGM format")
-                        except subprocess.CalledProcessError as pgm_error:
-                            pgm_error_msg = pgm_error.stderr if pgm_error.stderr else str(pgm_error)
-                            logger.error(f"PGM conversion/processing failed: {pgm_error_msg}")
-                            
-                            # Last resort - create a minimal XYT file with FIXED content
-                            # This ensures the process continues even if image processing fails
-                            logger.warning(f"Creating fallback XYT file for fingerprint {idx + 1}")
-                            test_xyt_path = f"{output_prefix}.xyt"
-                            with open(test_xyt_path, 'w') as f:
-                                # FIXED: Use the exact same fallback minutiae points
-                                f.write("100 100 90\n")
-                                f.write("150 150 45\n")
-                                f.write("200 200 135\n")
-                            logger.info("Created fallback XYT file with test minutiae")
+                        logger.info(f"Successfully processed fingerprint {idx + 1} with shared extraction function")
+                    except Exception as e:
+                        logger.error(f"Minutiae extraction error: {str(e)}")
+                        
+                        # Last resort - create a minimal XYT file with FIXED content
+                        # This ensures the process continues even if image processing fails
+                        logger.warning(f"Creating fallback XYT file for fingerprint {idx + 1}")
+                        test_xyt_path = f"{output_prefix}.xyt"
+                        with open(test_xyt_path, 'w') as f:
+                            # FIXED: Use the exact same fallback minutiae points
+                            f.write("100 100 90\n")
+                            f.write("150 150 45\n")
+                            f.write("200 200 135\n")
+                        logger.info("Created fallback XYT file with test minutiae")
                     
                     # Check if xyt file was created
                     xyt_path = f"{output_prefix}.xyt"

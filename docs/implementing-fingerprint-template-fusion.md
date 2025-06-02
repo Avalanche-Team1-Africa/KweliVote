@@ -275,3 +275,98 @@ Potential enhancements to consider:
 Template fusion is a critical component of our biometric registration system, enabling robust and consistent identification. By implementing it in the backend with careful attention to consistency and standards compliance, we've created a solid foundation for our biometric-to-DID pipeline.
 
 The fusion process effectively addresses the inherent variability in biometric samples while providing deterministic outputs suitable for cryptographic operations.
+
+## Testing Template Generation Consistency
+
+### Why Test Consistency?
+
+One critical aspect of fingerprint biometrics is ensuring that template generation remains identical between enrollment and verification phases. Inconsistencies can lead to:
+
+- False rejections during verification
+- Security vulnerabilities
+- Unstable DID generation
+- Poor user experience
+
+### Using the Fingerprint Test Script
+
+KweliVote includes a dedicated test script (`test_fingerprint_processing.py`) to verify template generation consistency:
+
+```bash
+# Run with a live backend server
+python3 test_fingerprint_processing.py
+
+# Run in offline mode (for development/testing)
+python3 test_fingerprint_processing.py --offline
+
+# Use the helper script (starts server if needed)
+./run_fingerprint_tests.sh
+```
+
+#### About Offline Mode
+
+The `--offline` option runs the tests without requiring a live backend server:
+
+- Simulates API responses with predefined test data
+- Creates synthetic fingerprint templates if sample images don't exist
+- Deliberately simulates both correct (matching) and incorrect (non-matching) template generation
+- Exercises the full test flow for demonstration and development purposes
+- Ideal for CI/CD pipelines, presentations, or when working without backend access
+
+When using offline mode, the script will output detailed logs showing the comparison process and will deliberately fail one test case to demonstrate the detection of inconsistent template generation.
+
+### What the Test Script Verifies
+
+The test script performs these critical checks:
+
+1. **Template Generation (Enrollment)**: Generates templates for sample fingerprints using the enrollment process
+2. **Template Generation (Verification)**: Generates templates for the same fingerprints using the verification process
+3. **Template Comparison**: Performs bit-by-bit comparison of enrollment and verification templates
+4. **Self-Matching**: Verifies that each fingerprint successfully matches against its own template
+5. **Detailed Logging**: Logs detailed information about any inconsistencies found
+
+### Example Test Results
+
+Successful test output will show:
+
+```
+Templates generated (enrollment): 5
+Templates generated (verification): 5
+Template consistency checks passed: 5
+Template consistency checks failed: 0
+Self-verification successes: 5
+Self-verification failures: 0
+
+TEST PASSED: All fingerprints matched with their own templates
+TEST PASSED: Template generation is consistent between enrollment and verification
+```
+
+If inconsistencies are found, the test will identify the specific files and differences:
+
+```
+❌ Templates differ between enrollment and verification!
+Values differ for key 'iso_template_base64'
+  Length in template 1: 2048
+  Length in template 2: 2048
+  Binary size in template 1: 1536 bytes
+  Binary size in template 2: 1536 bytes
+```
+
+### Debugging Template Inconsistencies
+
+When inconsistencies are found, examine:
+
+1. **Processing Steps**: Ensure all image normalization, feature extraction, and template creation steps are identical
+2. **Random Elements**: Check for timestamps, random seeds, or other non-deterministic elements
+3. **API Differences**: Verify that enrollment and verification APIs use the same underlying code
+4. **Parameter Values**: Ensure all parameters (thresholds, quality settings) are consistent
+
+### Recommended Testing Frequency
+
+Template consistency tests should be run:
+
+- After any changes to fingerprint processing code
+- When upgrading biometric libraries or dependencies
+- Before major system releases
+- As part of continuous integration pipelines
+
+For detailed instructions on running these tests, see the [Testing Fingerprint Processing](../README.md#testing-fingerprint-processing) section in the main README.
