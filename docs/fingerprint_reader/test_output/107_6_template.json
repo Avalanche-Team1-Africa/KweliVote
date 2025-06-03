@@ -1,10 +1,23 @@
 {
-  "iso_template_base64": "RU5ST0xMTUVOVF9URU1QTEFURV8xMDdfNi50aWY=",
-  "xyt_data": "RU5ST0xMTUVOVF9YWVRfREFUQV8xMDdfNi50aWY=",
+  "id": 187,
+  "created_at": "2025-06-03T20:32:33.626600Z",
+  "processing_status": "completed",
+  "iso_template_base64": "Rk1SAAAAAHgAAQAAAAAB9AH0AfQB9AEBAAEAKACoAOBGAQDoAPA8AQEAAQAyAQEYALiCAQEsASwAAQE2ATYUAQE4AWCgAQFAAUAoAQFKAUo8AQFUAVRQAQFeAV5kAQFoAWh4AQFyAXKMAQF8AXygAQGGAYa0AQGQAZDIAQGaAZrcAQGkAaTwAQGuAa4EAQG4AbgYAQHCAcIsAQHMAcxAAQHWAdZUAQHgAeBoAQHqAep8AQHzAfOQAQHzAfOkAQHzAfO4AQHzAfPMAQHzAfPgAQHzAfP0AQHzAfMIAQHzAfMcAQHzAfMwAQHzAfNEAQHzAfNYAQHzAfNsAQHzAfOAAQHzAfOUAQHzAfOoAQAAAAA=",
+  "error_message": null,
+  "national_id": "TEST12345678",
   "metadata": {
     "template_version": "1.0",
-    "creation_method": "enrollment",
-    "minutiae_count": 32,
-    "template_hash": "d8c6ca44ff9e2c8119f37d2978a128fd"
+    "creation_method": "fusion-stabilization",
+    "minutiae_count": 40,
+    "template_hash": "634e5f0b7842ec5989a5d5030afa74b3ed26d2f275731fcf635ba588fa590854",
+    "template_metrics": {
+      "original_minutiae_count": 47,
+      "fused_minutiae_count": 5,
+      "final_minutiae_count": 40
+    },
+    "center_point": {
+      "x": 445,
+      "y": 445
+    }
   }
 }

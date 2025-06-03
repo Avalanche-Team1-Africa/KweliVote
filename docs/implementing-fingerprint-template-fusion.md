@@ -307,12 +307,14 @@ python3 test_fingerprint_processing.py --offline
 The `--offline` option runs the tests without requiring a live backend server:
 
 - Simulates API responses with predefined test data
-- Creates synthetic fingerprint templates if sample images don't exist
+- Uses actual fingerprint images from the sample directory 
 - Deliberately simulates both correct (matching) and incorrect (non-matching) template generation
 - Exercises the full test flow for demonstration and development purposes
 - Ideal for CI/CD pipelines, presentations, or when working without backend access
 
-When using offline mode, the script will output detailed logs showing the comparison process and will deliberately fail one test case to demonstrate the detection of inconsistent template generation.
+When using offline mode, the script will output detailed logs showing the comparison process and will deliberately fail one test case (the first fingerprint file) to demonstrate the detection of inconsistent template generation.
+
+**Note:** Offline mode requires at least one sample fingerprint image in the `docs/fingerprint_reader/sample_fingerprints` directory. The script will report an error if no sample files are found.
 
 ### What the Test Script Verifies
 

@@ -253,11 +253,53 @@ class ProcessFingerprintTemplateView(APIView):
         """
         quantized = []
         for x, y, theta in minutiae_points:
-            qx = int(round(x / 8.0) * 8)
-            qy = int(round(y / 8.0) * 8)
+            # FIXED: Constrain coordinates to valid fingerprint image range BEFORE quantization
+            x_constrained = max(0, min(499, int(x)))
+            y_constrained = max(0, min(499, int(y)))
+            
+            qx = int(round(x_constrained / 8.0) * 8)
+            qy = int(round(y_constrained / 8.0) * 8)
             qtheta = int(round(theta / 10.0) * 10) % 360
+            
+            # Final constraint after quantization to ensure we stay in bounds
+            qx = max(0, min(499, qx))
+            qy = max(0, min(499, qy))
+            
             quantized.append((qx, qy, qtheta))
         return quantized
+    
+    def fix_minutiae_coordinates(self, minutiae_points):
+        """
+        Scale and normalize minutiae coordinates to ensure they're within a valid range.
+        
+        The minutiae data from the ISO template may have extremely large X values that 
+        are causing Bozorth3 to fail. This function scales them down to the expected range.
+        
+        Args:
+            minutiae_list: List of (x, y, theta) tuples
+            
+        Returns:
+            List of fixed (x, y, theta) tuples
+        """
+        if not minutiae_points:
+            return []
+        
+        fixed_minutiae = []
+        for x, y, theta in minutiae_points:
+            # Extract only the proper 14 bits for coordinates (7 bits high, 8 bits low)
+            # In ISO/IEC 19794-2 format, coordinates are 14 bits (7+8)
+            fixed_x = x & 0x3FFF  # Keep only lowest 14 bits
+            fixed_y = y & 0x3FFF  # Keep only lowest 14 bits
+            
+            # Ensure coordinates are within valid range (0-499)
+            fixed_x = min(499, fixed_x)
+            fixed_y = min(499, fixed_y)
+            
+            fixed_minutiae.append((fixed_x, fixed_y, theta))
+        
+        logger.info(f"Fixed minutiae coordinates: reduced from range {min([m[0] for m in minutiae_points] or [0])}-{max([m[0] for m in minutiae_points] or [0])} to {min([m[0] for m in fixed_minutiae] or [0])}-{max([m[0] for m in fixed_minutiae] or [0])}")
+        
+        return fixed_minutiae
     
     def post(self, request, format=None):
         serializer = FingerprintTemplateInputSerializer(data=request.data)
@@ -272,6 +314,11 @@ class ProcessFingerprintTemplateView(APIView):
                 {'error': 'National ID is required', 'detail': 'The nationalId field is mandatory for fingerprint processing'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+            
+        # Check if verification_mode flag is set - this will use the same process as verification
+        verification_mode = serializer.validated_data.get('verification_mode', False)
+        if verification_mode:
+            logger.info(f"Processing fingerprint in verification mode for national ID: {serializer.validated_data.get('nationalId')}")
             
         logger.info(f"Processing fingerprint template for national ID: {serializer.validated_data.get('nationalId')}")
             
@@ -372,6 +419,9 @@ class ProcessFingerprintTemplateView(APIView):
                     # Canonicalize and quantize before stabilization
                     fused_minutiae = self.canonicalize_minutiae(fused_minutiae)
                     fused_minutiae = self.quantize_minutiae(fused_minutiae)
+                    
+                    # Fix any suspicious coordinates before stabilization
+                    fused_minutiae = self.fix_minutiae_coordinates(fused_minutiae)
                     
                     # STEP 2: Apply template stabilization to ensure consistent minutiae selection
                     stabilized_minutiae = self.stabilize_template(fused_minutiae)
@@ -501,33 +551,44 @@ class ProcessFingerprintTemplateView(APIView):
                         
                         # Extract XYT data for BOZORTH3 matching
                         xyt_path = os.path.join(work_dir, "template.xyt")
-                        with open(xyt_path, 'w') as f:
-                            # Extract minutiae from ISO template (each minutia is 6 bytes)
-                            # Skip the 32-byte header
-                            offset = 32
-                            minutiae_count = iso_data[offset-1]  # Get minutiae count from the header
-                            
-                            # Extract minutiae from ISO template (each minutia is 6 bytes)
-                            for i in range(minutiae_count):
-                                idx = offset + (i * 6)
-                                if idx + 6 <= len(iso_data):
-                                    # Extract x, y, and theta from the ISO format
-                                    x_high = iso_data[idx] & 0x7F
-                                    x_low = iso_data[idx+1]
-                                    x = (x_high << 8) | x_low
-                                    
-                                    y_high = iso_data[idx+2] & 0x7F
-                                    y_low = iso_data[idx+3]
-                                    y = (y_high << 8) | y_low
-                                    
-                                    theta = iso_data[idx+4]
-                                    
-                                    # Write in MINDTCT XYT format
-                                    f.write(f"{x} {y} {theta}\n")
+                        extracted_minutiae = []
                         
-                        # Read the XYT file and store it in the model
-                        with open(xyt_path, 'rb') as f:
-                            fingerprint_template.xyt_data = f.read()
+                        # Extract minutiae from ISO template (each minutia is 6 bytes)
+                        # Skip the 32-byte header
+                        offset = 32
+                        minutiae_count = iso_data[offset-1]  # Get minutiae count from the header
+                        
+                        # Extract minutiae from ISO template (each minutia is 6 bytes)
+                        for i in range(minutiae_count):
+                            idx = offset + (i * 6)
+                            if idx + 6 <= len(iso_data):
+                                # Extract x, y, and theta from the ISO format
+                                x_high = iso_data[idx] & 0x7F
+                                x_low = iso_data[idx+1]
+                                x = (x_high << 8) | x_low
+                                
+                                y_high = iso_data[idx+2] & 0x7F
+                                y_low = iso_data[idx+3]
+                                y = (y_high << 8) | y_low
+                                
+                                theta = iso_data[idx+4]
+                                
+                                extracted_minutiae.append((x, y, theta))
+                                
+                        # Fix any suspicious coordinates before writing to XYT file
+                        fixed_minutiae = self.fix_minutiae_coordinates(extracted_minutiae)
+                        
+                        # Write fixed minutiae to XYT file
+                        with open(xyt_path, 'w') as f:
+                            for x, y, theta in fixed_minutiae:
+                                f.write(f"{x} {y} {theta}\n")
+                        
+                        # Read the XYT file and store it in the model as text (not binary)
+                        with open(xyt_path, 'r', encoding='utf-8') as f:
+                            xyt_text = f.read()
+                        
+                        # Store XYT data as UTF-8 encoded bytes for database compatibility
+                        fingerprint_template.xyt_data = xyt_text.encode('utf-8')
                         
                         fingerprint_template.processing_status = 'completed'
                         fingerprint_template.save()

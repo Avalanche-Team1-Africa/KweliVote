@@ -349,6 +349,8 @@ KweliVote uses fingerprint biometrics for secure voter identification. It's crit
    - CI/CD pipelines where starting a full backend isn't practical
 
    In offline mode, the script simulates API responses and deliberately creates both matching and non-matching templates to demonstrate the detection capabilities.
+   
+   **Note:** Offline mode still requires sample fingerprint images in the `docs/fingerprint_reader/sample_fingerprints` directory. The script will not create synthetic images.
 
 ### What the Tests Verify
 

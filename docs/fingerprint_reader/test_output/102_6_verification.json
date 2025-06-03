@@ -1,5 +1,6 @@
 {
   "national_id": "TEST12345678",
-  "match_score": 85,
-  "is_match": true
+  "match_score": 130,
+  "is_match": true,
+  "verification_template_hash": "9cce0e2cd57c5c08ff866eb5ca3ef78361cb81302f87f1ca3f8039006d81ee9d"
 }

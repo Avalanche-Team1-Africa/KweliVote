@@ -15,15 +15,15 @@ fi
 # Ensure the backend server is running (only if not in offline mode)
 BACKEND_PID=""
 if [ "$OFFLINE_MODE" == "false" ]; then
-    BACKEND_PID=$(pgrep -f "manage.py runserver" || echo "")
-    if [ -z "$BACKEND_PID" ]; then
-        echo "Backend server is not running. Starting it now..."
+BACKEND_PID=$(pgrep -f "manage.py runserver" || echo "")
+if [ -z "$BACKEND_PID" ]; then
+    echo "Backend server is not running. Starting it now..."
         cd kwelivote-app/backend
-        python manage.py runserver &
-        BACKEND_PID=$!
-        # Wait for server to start
-        sleep 5
-        echo "Backend server started with PID: $BACKEND_PID"
+    python manage.py runserver &
+    BACKEND_PID=$!
+    # Wait for server to start
+    sleep 5
+    echo "Backend server started with PID: $BACKEND_PID"
         # Return to the original directory
         cd ../..
     fi
@@ -49,11 +49,11 @@ fi
 
 # Ask if the user wants to keep the backend server running (only if we started one)
 if [ "$OFFLINE_MODE" == "false" ] && [ ! -z "$BACKEND_PID" ]; then
-    read -p "Keep the backend server running? (y/n): " KEEP_RUNNING
+read -p "Keep the backend server running? (y/n): " KEEP_RUNNING
     if [[ "$KEEP_RUNNING" != "y" && "$KEEP_RUNNING" != "Y" ]]; then
-        echo "Stopping backend server..."
-        kill $BACKEND_PID
-        echo "Backend server stopped."
+    echo "Stopping backend server..."
+    kill $BACKEND_PID
+    echo "Backend server stopped."
     fi
 fi
 
