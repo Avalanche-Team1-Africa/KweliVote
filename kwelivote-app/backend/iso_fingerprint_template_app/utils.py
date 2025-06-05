@@ -96,6 +96,42 @@ def extract_minutiae(image_path, output_dir):
         # Read the minutiae template file (.xyt format)
         xyt_path = f"{output_basename}.xyt"
         if os.path.exists(xyt_path) and os.path.getsize(xyt_path) > 0:
+            # Read the XYT file, apply clamping, and write it back
+            with open(xyt_path, 'r') as f:
+                lines = f.readlines()
+            
+            # Process each line to clamp values > 499 to 499
+            modified_lines = []
+            for line in lines:
+                parts = line.strip().split()
+                if len(parts) >= 3:
+                    try:
+                        x = int(float(parts[0]))
+                        y = int(float(parts[1]))
+                        theta = int(float(parts[2]))
+                        
+                        # Clamp X, Y, and T values to a maximum of 499
+                        clamped_x = min(499, x)
+                        clamped_y = min(499, y)
+                        clamped_theta = min(499, theta)
+                        
+                        if x != clamped_x or y != clamped_y or theta != clamped_theta:
+                            logger.info(f"Clamped minutiae values: ({x},{y},{theta}) -> ({clamped_x},{clamped_y},{clamped_theta})")
+                        
+                        # Add the clamped line
+                        modified_lines.append(f"{clamped_x} {clamped_y} {clamped_theta}\n")
+                    except (ValueError, IndexError):
+                        # If we can't parse the line, keep it as is
+                        modified_lines.append(line)
+                else:
+                    # Keep lines with unexpected format as they are
+                    modified_lines.append(line)
+            
+            # Write the modified lines back to the file
+            with open(xyt_path, 'w') as f:
+                f.writelines(modified_lines)
+                
+            # Now read the file as binary data for return
             with open(xyt_path, 'rb') as f:
                 xyt_data = f.read()
             
@@ -141,6 +177,42 @@ def extract_minutiae(image_path, output_dir):
             # Read the minutiae template file (.xyt format)
             xyt_path = f"{output_basename}.xyt"
             if os.path.exists(xyt_path) and os.path.getsize(xyt_path) > 0:
+                # Read the XYT file, apply clamping, and write it back
+                with open(xyt_path, 'r') as f:
+                    lines = f.readlines()
+                
+                # Process each line to clamp values > 499 to 499
+                modified_lines = []
+                for line in lines:
+                    parts = line.strip().split()
+                    if len(parts) >= 3:
+                        try:
+                            x = int(float(parts[0]))
+                            y = int(float(parts[1]))
+                            theta = int(float(parts[2]))
+                            
+                            # Clamp X, Y, and T values to a maximum of 499
+                            clamped_x = min(499, x)
+                            clamped_y = min(499, y)
+                            clamped_theta = min(499, theta)
+                            
+                            if x != clamped_x or y != clamped_y or theta != clamped_theta:
+                                logger.info(f"Clamped minutiae values: ({x},{y},{theta}) -> ({clamped_x},{clamped_y},{clamped_theta})")
+                            
+                            # Add the clamped line
+                            modified_lines.append(f"{clamped_x} {clamped_y} {clamped_theta}\n")
+                        except (ValueError, IndexError):
+                            # If we can't parse the line, keep it as is
+                            modified_lines.append(line)
+                    else:
+                        # Keep lines with unexpected format as they are
+                        modified_lines.append(line)
+                
+                # Write the modified lines back to the file
+                with open(xyt_path, 'w') as f:
+                    f.writelines(modified_lines)
+                    
+                # Now read the file as binary data for return
                 with open(xyt_path, 'rb') as f:
                     xyt_data = f.read()
                 
@@ -238,9 +310,8 @@ class Bozorth3Matcher:
                 probe_data = Bozorth3Matcher._ensure_binary_template(probe_template)
                 ref_data = Bozorth3Matcher._ensure_binary_template(reference_template)
                 
-                # Fix any suspicious coordinates in both templates
-                probe_data = Bozorth3Matcher.fix_minutiae_coordinates(probe_data)
-                ref_data = Bozorth3Matcher.fix_minutiae_coordinates(ref_data)
+                # Use original non-transformed minutiae
+                logger.info("Using original non-transformed minutiae coordinates")
                 
                 logger.info(f"DEBUGGING: Probe data type: {type(probe_data)}, size: {len(probe_data)} bytes")
                 logger.info(f"DEBUGGING: Reference data type: {type(ref_data)}, size: {len(ref_data)} bytes")
@@ -444,80 +515,4 @@ class Bozorth3Matcher:
             # Clean up the probe template file
             if os.path.exists(probe_path):
                 os.unlink(probe_path)
-    
-    @staticmethod
-    def fix_minutiae_coordinates(xyt_data):
-        """
-        Fix suspicious coordinates in XYT data before matching
-        
-        Args:
-            xyt_data: XYT data as a string or bytes
-            
-        Returns:
-            Bytes containing the fixed XYT data
-        """
-        if not xyt_data:
-            return xyt_data
-            
-        # Convert to string if bytes
-        if isinstance(xyt_data, bytes):
-            try:
-                data_str = xyt_data.decode('utf-8')
-            except UnicodeDecodeError:
-                # If we can't decode as UTF-8, try with latin-1
-                try:
-                    data_str = xyt_data.decode('latin-1')
-                except:
-                    # If all else fails, return as is
-                    logger.warning("Could not decode XYT data for fixing coordinates")
-                    return xyt_data
-        else:
-            data_str = xyt_data
-            
-        # Process each line to fix coordinates
-        fixed_lines = []
-        lines = data_str.strip().split('\n')
-        
-        for line in lines:
-            parts = line.strip().split()
-            if len(parts) >= 3:
-                try:
-                    x = int(float(parts[0]))
-                    y = int(float(parts[1]))
-                    theta = int(float(parts[2]))
-                    
-                    # Extract only the proper 14 bits for coordinates
-                    fixed_x = x & 0x3FFF  # Keep only lowest 14 bits
-                    fixed_y = y & 0x3FFF  # Keep only lowest 14 bits
-                    
-                    # Ensure coordinates are within valid range (0-499)
-                    fixed_x = min(499, fixed_x)
-                    fixed_y = min(499, fixed_y)
-                    
-                    # Rebuild the line with fixed coordinates
-                    fixed_lines.append(f"{fixed_x} {fixed_y} {theta}")
-                except (ValueError, IndexError):
-                    # If we can't parse the line, keep it as is
-                    fixed_lines.append(line)
-            else:
-                # Keep lines with unexpected format as they are
-                fixed_lines.append(line)
-                
-        # Join the fixed lines back into a string
-        fixed_data = '\n'.join(fixed_lines)
-        
-        # Log the fix
-        original_coords = [int(line.split()[0]) for line in lines if len(line.split()) >= 3]
-        fixed_coords = [int(line.split()[0]) for line in fixed_lines if len(line.split()) >= 3]
-        
-        if original_coords and fixed_coords:
-            orig_min_x = min(original_coords)
-            orig_max_x = max(original_coords)
-            fixed_min_x = min(fixed_coords)
-            fixed_max_x = max(fixed_coords)
-            
-            if orig_min_x != fixed_min_x or orig_max_x != fixed_max_x:
-                logger.info(f"Fixed XYT coordinates: reduced X range from {orig_min_x}-{orig_max_x} to {fixed_min_x}-{fixed_max_x}")
-                
-        # Return as bytes
-        return fixed_data.encode('utf-8')
+ 

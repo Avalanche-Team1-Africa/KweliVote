@@ -242,15 +242,21 @@ class VerifyFingerprintView(APIView):
         """
         quantized = []
         for x, y, theta in minutiae_points:
-            # FIXED: Constrain coordinates to valid fingerprint image range BEFORE quantization
-            x_constrained = max(0, min(499, int(x)))
-            y_constrained = max(0, min(499, int(y)))
+            # First extract only the proper 14 bits for coordinates (7 bits high, 8 bits low)
+            # In ISO/IEC 19794-2 format, coordinates are 14 bits (7+8)
+            x_val = x & 0x3FFF  # Keep only lowest 14 bits
+            y_val = y & 0x3FFF  # Keep only lowest 14 bits
             
+            # Then constrain to valid fingerprint image range
+            x_constrained = max(0, min(499, x_val))
+            y_constrained = max(0, min(499, y_val))
+            
+            # Now quantize to 8-pixel grid
             qx = int(round(x_constrained / 8.0) * 8)
             qy = int(round(y_constrained / 8.0) * 8)
             qtheta = int(round(theta / 10.0) * 10) % 360
             
-            # Final constraint after quantization to ensure we stay in bounds
+            # Final constraint check (should be unnecessary but kept for safety)
             qx = max(0, min(499, qx))
             qy = max(0, min(499, qy))
             
@@ -375,46 +381,22 @@ class VerifyFingerprintView(APIView):
                         
                         theta = iso_data[idx+4]
                         
+                        # Properly normalize coordinates and angle
+                        clamped_x = min(499, max(0, x))
+                        clamped_y = min(499, max(0, y))
+                        clamped_theta = theta % 180
+                        
+                        if x != clamped_x or y != clamped_y or theta != clamped_theta:
+                            logger.info(f"Normalized minutiae values: ({x},{y},{theta}) -> ({clamped_x},{clamped_y},{clamped_theta})")
+                        
                         # Write in MINDTCT XYT format
-                        f.write(f"{x} {y} {theta}\n")
+                        f.write(f"{clamped_x} {clamped_y} {clamped_theta}\n")
             
             # Read the XYT file
             with open(xyt_path, 'r', encoding='utf-8') as f:
                 xyt_text = f.read()
             
-            # FIXED: Before writing to XYT, constrain minutiae coordinates
-            def fix_minutiae_coordinates(minutiae_points):
-                """
-                Scale and normalize minutiae coordinates to ensure they're within a valid range.
-                
-                The minutiae data from the ISO template may have extremely large X values that 
-                are causing Bozorth3 to fail. This function scales them down to the expected range.
-                
-                Args:
-                    minutiae_list: List of (x, y, theta) tuples
-                    
-                Returns:
-                    List of fixed (x, y, theta) tuples
-                """
-                if not minutiae_points:
-                    return []
-                
-                fixed_minutiae = []
-                for x, y, theta in minutiae_points:
-                    # Extract only the proper 14 bits for coordinates (7 bits high, 8 bits low)
-                    # In ISO/IEC 19794-2 format, coordinates are 14 bits (7+8)
-                    fixed_x = x & 0x3FFF  # Keep only lowest 14 bits
-                    fixed_y = y & 0x3FFF  # Keep only lowest 14 bits
-                    
-                    # Ensure coordinates are within valid range (0-499)
-                    fixed_x = min(499, fixed_x)
-                    fixed_y = min(499, fixed_y)
-                    
-                    fixed_minutiae.append((fixed_x, fixed_y, theta))
-                
-                logger.info(f"Fixed minutiae coordinates: reduced from range {min([m[0] for m in minutiae_points])}-{max([m[0] for m in minutiae_points])} to {min([m[0] for m in fixed_minutiae])}-{max([m[0] for m in fixed_minutiae])}")
-                
-                return fixed_minutiae
+
                 
             # Read the XYT file
             with open(xyt_path, 'r', encoding='utf-8') as f:
@@ -428,13 +410,21 @@ class VerifyFingerprintView(APIView):
                     x, y, theta = int(parts[0]), int(parts[1]), int(parts[2])
                     minutiae_list.append((x, y, theta))
                     
-            # Fix any suspicious coordinates before encoding in the response
-            fixed_minutiae = fix_minutiae_coordinates(minutiae_list)
+            # Use original non-transformed minutiae coordinates
+            logger.info("Using original non-transformed minutiae coordinates")
             
-            # Write the fixed minutiae back to the XYT file
+            # Write the minutiae back to the XYT file, properly normalizing coordinates and angles
             with open(xyt_path, 'w', encoding='utf-8') as f:
-                for x, y, theta in fixed_minutiae:
-                    f.write(f"{x} {y} {theta}\n")
+                for x, y, theta in minutiae_list:
+                    # Properly normalize coordinates and angle
+                    clamped_x = min(499, max(0, x))
+                    clamped_y = min(499, max(0, y))
+                    clamped_theta = theta % 180
+                    
+                    if x != clamped_x or y != clamped_y or theta != clamped_theta:
+                        logger.info(f"Normalized minutiae values: ({x},{y},{theta}) -> ({clamped_x},{clamped_y},{clamped_theta})")
+                    
+                    f.write(f"{clamped_x} {clamped_y} {clamped_theta}\n")
                     
             # Read the updated XYT file
             with open(xyt_path, 'r', encoding='utf-8') as f:
@@ -621,8 +611,8 @@ class VerifyFingerprintView(APIView):
                                     minutiae_count = iso_template_data[offset-1]  # Get minutiae count from header
                                     logger.info(f"ISO template contains {minutiae_count} minutiae points")
                                     
-                                    # Convert to XYT format
-                                    xyt_lines = []
+                                    # Convert to XYT format with optimization
+                                    minutiae_list = []
                                     for i in range(minutiae_count):
                                         idx = offset + (i * 6)
                                         if idx + 6 <= len(iso_template_data):
@@ -637,12 +627,34 @@ class VerifyFingerprintView(APIView):
                                             
                                             theta = iso_template_data[idx+4]
                                             
-                                            # Add XYT line
-                                            xyt_lines.append(f"{x} {y} {theta}")
+                                            # Properly normalize coordinates and angles
+                                            x = min(499, max(0, x))
+                                            y = min(499, max(0, y))
+                                            theta = theta % 180
+                                            
+                                            minutiae_list.append((x, y, theta))
+                                    
+                                    # Optimize minutiae by selecting most reliable ones (center of fingerprint)
+                                    if len(minutiae_list) > 0:
+                                        # Define center point
+                                        center_x, center_y = 250, 250
+                                        
+                                        # Sort minutiae by distance from center
+                                        original_count = len(minutiae_list)
+                                        minutiae_list.sort(key=lambda m: ((m[0]-center_x)**2 + (m[1]-center_y)**2))
+                                        
+                                        # Limit to the most reliable minutiae for faster matching
+                                        max_minutiae = 40  # A good balance between accuracy and speed
+                                        if len(minutiae_list) > max_minutiae:
+                                            minutiae_list = minutiae_list[:max_minutiae]
+                                            logger.info(f"Optimized stored template minutiae from {original_count} to {len(minutiae_list)} for faster matching")
+                                    
+                                    # Convert optimized minutiae to XYT format
+                                    xyt_lines = [f"{x} {y} {theta}" for x, y, theta in minutiae_list]
                                     
                                     # Convert to bytes for matching
                                     stored_template_data = '\n'.join(xyt_lines).encode('utf-8')
-                                    logger.info(f"Converted ISO template to XYT format: {len(xyt_lines)} lines, {len(stored_template_data)} bytes")
+                                    logger.info(f"Converted ISO template to optimized XYT format: {len(xyt_lines)} lines, {len(stored_template_data)} bytes")
                                 else:
                                     logger.error("Invalid ISO template: too short")
                                     return Response({
@@ -657,8 +669,49 @@ class VerifyFingerprintView(APIView):
                         else:
                             # Fetch from database
                             stored_template = FingerprintTemplate.objects.get(national_id=national_id)
-                            stored_template_data = stored_template.xyt_data
+                            stored_template_data_raw = stored_template.xyt_data
                             logger.info(f"Found template in database for national ID: {national_id}")
+                            
+                            # Optimize the stored template from the database
+                            try:
+                                # Parse the XYT data and optimize minutiae
+                                minutiae_list = []
+                                xyt_text = stored_template_data_raw.decode('utf-8')
+                                
+                                for line in xyt_text.strip().split('\n'):
+                                    if line.strip():
+                                        parts = line.split()
+                                        if len(parts) >= 3:
+                                            x, y, theta = int(parts[0]), int(parts[1]), int(parts[2])
+                                            # Ensure coordinates and angles are properly normalized
+                                            x = min(499, max(0, x))
+                                            y = min(499, max(0, y))
+                                            theta = theta % 180
+                                            minutiae_list.append((x, y, theta))
+                                
+                                # Optimize minutiae by selecting most reliable ones (center of fingerprint)
+                                if len(minutiae_list) > 0:
+                                    # Define center point
+                                    center_x, center_y = 250, 250
+                                    
+                                    # Sort minutiae by distance from center
+                                    original_count = len(minutiae_list)
+                                    minutiae_list.sort(key=lambda m: ((m[0]-center_x)**2 + (m[1]-center_y)**2))
+                                    
+                                    # Limit to the most reliable minutiae for faster matching
+                                    max_minutiae = 40  # A good balance between accuracy and speed
+                                    if len(minutiae_list) > max_minutiae:
+                                        minutiae_list = minutiae_list[:max_minutiae]
+                                        logger.info(f"Optimized database template minutiae from {original_count} to {len(minutiae_list)} for faster matching")
+                                
+                                # Convert optimized minutiae to XYT format
+                                xyt_lines = [f"{x} {y} {theta}" for x, y, theta in minutiae_list]
+                                stored_template_data = '\n'.join(xyt_lines).encode('utf-8')
+                                logger.info(f"Optimized stored template from database: {len(xyt_lines)} minutiae points")
+                                
+                            except Exception as e:
+                                logger.warning(f"Error optimizing stored template: {str(e)}, using original template")
+                                stored_template_data = stored_template_data_raw
                     except FingerprintTemplate.DoesNotExist:
                         return Response({
                             'error': f'No fingerprint template found for national ID: {national_id}'
@@ -718,13 +771,45 @@ class IdentifyFingerprintView(APIView):
             threshold = int(request.data.get('threshold', 40))
             limit = int(request.data.get('limit', 5))
             
-            # Create a temporary file for the probe template
+            # Create a temporary file for the probe template with optimization
             probe_xyt_path = os.path.join(output_dir, "probe.xyt")
-            with open(probe_xyt_path, 'wb') as f:
+            with open(probe_xyt_path, 'w') as f:
+                # Parse the XYT data and write to file with optimization
+                minutiae_list = []
                 if isinstance(probe_xyt_data, str):
-                    f.write(probe_xyt_data.encode())
+                    xyt_text = probe_xyt_data
                 else:
-                    f.write(probe_xyt_data)
+                    xyt_text = probe_xyt_data.decode('utf-8')
+                    
+                for line in xyt_text.strip().split('\n'):
+                    if line.strip():
+                        parts = line.split()
+                        if len(parts) >= 3:
+                            x, y, theta = int(parts[0]), int(parts[1]), int(parts[2])
+                            # Ensure coordinates and angles are properly normalized
+                            x = min(499, max(0, x))
+                            y = min(499, max(0, y))
+                            theta = theta % 180
+                            minutiae_list.append((x, y, theta))
+                
+                # Optimize minutiae by selecting most reliable ones (center of fingerprint)
+                if len(minutiae_list) > 0:
+                    # Define center point
+                    center_x, center_y = 250, 250
+                    
+                    # Sort minutiae by distance from center (central minutiae are usually more reliable)
+                    minutiae_list.sort(key=lambda m: ((m[0]-center_x)**2 + (m[1]-center_y)**2))
+                    
+                    # Limit to the most reliable minutiae for faster matching
+                    max_minutiae = 40  # A good balance between accuracy and speed
+                    if len(minutiae_list) > max_minutiae:
+                        original_count = len(minutiae_list)
+                        minutiae_list = minutiae_list[:max_minutiae]
+                        logger.info(f"Optimized minutiae count from {original_count} to {len(minutiae_list)} for faster matching")
+                
+                # Write optimized minutiae to file
+                for x, y, theta in minutiae_list:
+                    f.write(f"{x} {y} {theta}\n")
             
             # Fetch all templates from the database
             templates = FingerprintTemplate.objects.all()
@@ -738,7 +823,7 @@ class IdentifyFingerprintView(APIView):
                     
                 # Create a temporary file for the gallery template
                 gallery_xyt_path = os.path.join(output_dir, f"gallery_{template.id}.xyt")
-                with open(gallery_xyt_path, 'wb') as f:
+                with open(gallery_xyt_path, 'w') as f:
                     # Extract minutiae from ISO template
                     iso_data = template.iso_template
                     
@@ -747,6 +832,7 @@ class IdentifyFingerprintView(APIView):
                     minutiae_count = iso_data[offset-1]  # Get minutiae count from the header
                     
                     # Extract minutiae from ISO template (each minutia is 6 bytes)
+                    minutiae_list = []
                     for i in range(minutiae_count):
                         idx = offset + (i * 6)
                         if idx + 6 <= len(iso_data):
@@ -761,12 +847,35 @@ class IdentifyFingerprintView(APIView):
                             
                             theta = iso_data[idx+4]
                             
-                            # Write in MINDTCT XYT format
-                            f.write(f"{x} {y} {theta}\n".encode())
+                            # Properly normalize coordinates and angles
+                            x = min(499, max(0, x))
+                            y = min(499, max(0, y))
+                            theta = theta % 180
+                            
+                            minutiae_list.append((x, y, theta))
                     
                     # If we couldn't extract any minutiae, create a minimal set
-                    if minutiae_count == 0:
-                        f.write(b"100 100 90\n150 150 45\n200 200 135\n")
+                    if len(minutiae_list) == 0:
+                        minutiae_list = [(100, 100, 90), (150, 150, 45), (200, 200, 135)]
+                    
+                    # Optimize minutiae by selecting most reliable ones (center of fingerprint)
+                    if len(minutiae_list) > 0:
+                        # Define center point
+                        center_x, center_y = 250, 250
+                        
+                        # Sort minutiae by distance from center
+                        original_count = len(minutiae_list)
+                        minutiae_list.sort(key=lambda m: ((m[0]-center_x)**2 + (m[1]-center_y)**2))
+                        
+                        # Limit to the most reliable minutiae for faster matching
+                        max_minutiae = 40  # A good balance between accuracy and speed
+                        if len(minutiae_list) > max_minutiae:
+                            minutiae_list = minutiae_list[:max_minutiae]
+                            logger.info(f"Optimized gallery template minutiae from {original_count} to {len(minutiae_list)}")
+                    
+                    # Write optimized minutiae to file
+                    for x, y, theta in minutiae_list:
+                        f.write(f"{x} {y} {theta}\n")
                 
                 try:
                     # Run BOZORTH3 for matching

@@ -253,53 +253,23 @@ class ProcessFingerprintTemplateView(APIView):
         """
         quantized = []
         for x, y, theta in minutiae_points:
-            # FIXED: Constrain coordinates to valid fingerprint image range BEFORE quantization
-            x_constrained = max(0, min(499, int(x)))
-            y_constrained = max(0, min(499, int(y)))
+            # Constrain to valid fingerprint image range (0-499)
+            x_constrained = max(0, min(499, x))
+            y_constrained = max(0, min(499, y))
             
+            # Now quantize to 8-pixel grid
             qx = int(round(x_constrained / 8.0) * 8)
             qy = int(round(y_constrained / 8.0) * 8)
             qtheta = int(round(theta / 10.0) * 10) % 360
             
-            # Final constraint after quantization to ensure we stay in bounds
+            # Final constraint check (should be unnecessary but kept for safety)
             qx = max(0, min(499, qx))
             qy = max(0, min(499, qy))
             
             quantized.append((qx, qy, qtheta))
         return quantized
     
-    def fix_minutiae_coordinates(self, minutiae_points):
-        """
-        Scale and normalize minutiae coordinates to ensure they're within a valid range.
-        
-        The minutiae data from the ISO template may have extremely large X values that 
-        are causing Bozorth3 to fail. This function scales them down to the expected range.
-        
-        Args:
-            minutiae_list: List of (x, y, theta) tuples
-            
-        Returns:
-            List of fixed (x, y, theta) tuples
-        """
-        if not minutiae_points:
-            return []
-        
-        fixed_minutiae = []
-        for x, y, theta in minutiae_points:
-            # Extract only the proper 14 bits for coordinates (7 bits high, 8 bits low)
-            # In ISO/IEC 19794-2 format, coordinates are 14 bits (7+8)
-            fixed_x = x & 0x3FFF  # Keep only lowest 14 bits
-            fixed_y = y & 0x3FFF  # Keep only lowest 14 bits
-            
-            # Ensure coordinates are within valid range (0-499)
-            fixed_x = min(499, fixed_x)
-            fixed_y = min(499, fixed_y)
-            
-            fixed_minutiae.append((fixed_x, fixed_y, theta))
-        
-        logger.info(f"Fixed minutiae coordinates: reduced from range {min([m[0] for m in minutiae_points] or [0])}-{max([m[0] for m in minutiae_points] or [0])} to {min([m[0] for m in fixed_minutiae] or [0])}-{max([m[0] for m in fixed_minutiae] or [0])}")
-        
-        return fixed_minutiae
+
     
     def post(self, request, format=None):
         serializer = FingerprintTemplateInputSerializer(data=request.data)
@@ -419,9 +389,6 @@ class ProcessFingerprintTemplateView(APIView):
                     # Canonicalize and quantize before stabilization
                     fused_minutiae = self.canonicalize_minutiae(fused_minutiae)
                     fused_minutiae = self.quantize_minutiae(fused_minutiae)
-                    
-                    # Fix any suspicious coordinates before stabilization
-                    fused_minutiae = self.fix_minutiae_coordinates(fused_minutiae)
                     
                     # STEP 2: Apply template stabilization to ensure consistent minutiae selection
                     stabilized_minutiae = self.stabilize_template(fused_minutiae)
@@ -575,13 +542,18 @@ class ProcessFingerprintTemplateView(APIView):
                                 
                                 extracted_minutiae.append((x, y, theta))
                                 
-                        # Fix any suspicious coordinates before writing to XYT file
-                        fixed_minutiae = self.fix_minutiae_coordinates(extracted_minutiae)
-                        
-                        # Write fixed minutiae to XYT file
+                        # Write extracted minutiae to XYT file, clamping values > 499 to 499
                         with open(xyt_path, 'w') as f:
-                            for x, y, theta in fixed_minutiae:
-                                f.write(f"{x} {y} {theta}\n")
+                            for x, y, theta in extracted_minutiae:
+                                # Clamp X, Y, and T values to a maximum of 499
+                                clamped_x = min(499, x)
+                                clamped_y = min(499, y)
+                                clamped_theta = min(499, theta)
+                                
+                                if x != clamped_x or y != clamped_y or theta != clamped_theta:
+                                    logger.info(f"Clamped minutiae values: ({x},{y},{theta}) -> ({clamped_x},{clamped_y},{clamped_theta})")
+                                
+                                f.write(f"{clamped_x} {clamped_y} {clamped_theta}\n")
                         
                         # Read the XYT file and store it in the model as text (not binary)
                         with open(xyt_path, 'r', encoding='utf-8') as f:
