@@ -8,6 +8,8 @@ import cv2
 import io
 import PIL.Image
 import base64
+from PIL import Image
+from io import BytesIO
 
 logger = logging.getLogger(__name__)
 
@@ -23,46 +25,34 @@ these functions must be thoroughly tested to ensure it doesn't reduce match accu
 
 def normalize_image(image_data):
     """
-    Normalize fingerprint image: resize, grayscale, histogram equalization.
-    Returns normalized PNG bytes.
+    Normalize image data to ensure consistent format.
+    Assumes input image is already grayscale with 8-bit depth.
     
     Args:
-        image_data: Binary image data
+        image_data: Raw image data bytes
         
     Returns:
-        Normalized PNG image data as bytes
+        Normalized image data bytes
     """
-    logger.info(f"Normalizing fingerprint image, input size: {len(image_data)} bytes")
-    
     try:
-        # Read image from bytes
-        img = PIL.Image.open(io.BytesIO(image_data)).convert('L')  # Grayscale
-        original_size = img.size
-        logger.info(f"Original image size: {original_size[0]}x{original_size[1]}")
-        
-        # Always resize to 500x500 for consistency
-        target_size = (500, 500)
-        logger.info(f"Resizing image to {target_size[0]}x{target_size[1]}")
-        img = img.resize(target_size, PIL.Image.BILINEAR)
-        
-        # Convert to numpy array for further processing
-        img_np = np.array(img)
-        
-        # Apply histogram equalization for contrast enhancement
-        logger.info("Applying histogram equalization")
-        img_eq = cv2.equalizeHist(img_np)
-        
-        # Save as PNG with consistent settings
-        logger.info("Encoding as PNG")
-        _, buf = cv2.imencode('.png', img_eq)
-        normalized_data = buf.tobytes()
-        
-        logger.info(f"Normalized image size: {len(normalized_data)} bytes")
-        return normalized_data
-        
+        # Open image from bytes
+        with Image.open(BytesIO(image_data)) as img:
+            # Convert to RGB mode if needed (some PNG files might be in RGBA)
+            if img.mode == 'RGBA':
+                img = img.convert('RGB')
+            
+            # Resize to standard dimensions if needed
+            if img.size != (500, 550):
+                img = img.resize((500, 550), Image.Resampling.LANCZOS)
+            
+            # Save normalized image
+            output = BytesIO()
+            img.save(output, format='PNG')
+            return output.getvalue()
+            
     except Exception as e:
         logger.error(f"Error normalizing image: {str(e)}")
-        raise Exception(f"Image normalization failed: {str(e)}")
+        raise
 
 def extract_minutiae(image_path, output_dir):
     """

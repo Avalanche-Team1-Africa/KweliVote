@@ -198,39 +198,47 @@ class FingerprintTester:
         if not encoded_fingerprint:
             return None
         
-        # Prepare the request payload
+        # Prepare the request payload with the correct format
         payload = {
             "nationalId": self.national_id,
             "fingerprints": [
                 {
-                    "finger": "right_index",
-                    "sample": encoded_fingerprint
+                    "sample": encoded_fingerprint,
+                    "hand": "right",
+                    "position": "index"
                 }
-            ]
+            ],
+            "extract_only": True,
+            "threshold": 40
         }
         
         try:
-            # Make the API request
+            # Make the API request to the correct endpoint
             response = requests.post(
-                f"{API_BASE_URL}/fingerprints/process-fingerprint-template/",
+                f"{API_BASE_URL}/fingerprints/verify-fingerprint/",
                 json=payload,
                 headers={"Authorization": f"Bearer {self.auth_token}"}
             )
             response.raise_for_status()
             
-            template_data = response.json()
-            logger.info(f"Successfully generated template for {filename}")
-            
-            # Save the template to a file
-            output_path = os.path.join(self.output_dir, f"{filename.split('.')[0]}_template.json")
-            with open(output_path, 'w') as f:
-                json.dump(template_data, f, indent=2)
-            
-            logger.info(f"Saved template to {output_path}")
-            
-            # Store the template for matching tests
-            self.templates[filename] = template_data
-            return template_data
+            result = response.json()
+            if "extracted_template" in result:
+                template_data = result["extracted_template"]
+                logger.info(f"Successfully generated template for {filename}")
+                
+                # Save the template to a file
+                output_path = os.path.join(self.output_dir, f"{filename.split('.')[0]}_template.json")
+                with open(output_path, 'w') as f:
+                    json.dump(template_data, f, indent=2)
+                
+                logger.info(f"Saved template to {output_path}")
+                
+                # Store the template for matching tests
+                self.templates[filename] = template_data
+                return template_data
+            else:
+                logger.error("API response doesn't contain extracted template data")
+                return None
             
         except requests.exceptions.RequestException as e:
             logger.error(f"Error generating template: {str(e)}")
