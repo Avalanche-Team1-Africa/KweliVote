@@ -575,11 +575,17 @@ export const fingerprintAPI = {
     
     console.log(`Sending fingerprint template request for national ID: ${template.nationalId}`);
     
-    // We're sending the template data directly without nesting it under a 'template' property
+    // Use the verify-fingerprint endpoint with extract_only=true to process JSON data with base64 images
+    // The process-fingerprint-template endpoint only accepts file uploads, not JSON data
+    const requestData = {
+      ...template,
+      extract_only: true  // This tells the verification endpoint to only extract the template, not perform matching
+    };
+    
     return authenticatedRequest(
-      `${API_BASE_URL}/fingerprints/process-fingerprint-template/`,
+      `${API_BASE_URL}/fingerprints/verify-fingerprint/`,
       'POST',
-      template
+      requestData
     );
   },
   
