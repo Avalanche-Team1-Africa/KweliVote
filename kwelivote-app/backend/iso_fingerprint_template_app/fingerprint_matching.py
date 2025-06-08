@@ -220,11 +220,15 @@ class VerifyFingerprintView(APIView):
     
     def canonicalize_minutiae(self, minutiae_points):
         """
-        Center and align minutiae to a canonical position and orientation - IDENTICAL to ProcessFingerprintTemplateView
+        Center and align minutiae to a canonical position and orientation with improved angle distribution
         """
         if not minutiae_points:
             return []
         points = np.array(minutiae_points)
+        
+        # Store original angles for diversity preservation and ensure full range
+        original_angles = points[:, 2].copy() % 180  # Ensure 0-180° range
+        
         # Center
         center_x = int(np.mean(points[:, 0]))
         center_y = int(np.mean(points[:, 1]))
@@ -234,14 +238,118 @@ class VerifyFingerprintView(APIView):
         # Shift back to 250,250
         points[:, 0] += 250
         points[:, 1] += 250
+        
+        # Ensure angles are in 0-180° range before diversity preservation
+        points[:, 2] = points[:, 2] % 180
+        
+        # Apply angle diversity preservation across full range
+        points[:, 2] = self._preserve_angle_diversity(points[:, 2], original_angles)
+        
         return [tuple(map(int, pt)) for pt in points]
+    
+    def _preserve_angle_diversity(self, angles, original_angles):
+        """
+        Preserve angle diversity by ensuring even distribution across the full 0-180° range.
+        """
+        angles = np.array(angles)
+        original_angles = np.array(original_angles)
+        
+        # Define angle bins (8 bins of 22.5° each for 0-180° range)
+        num_bins = 8
+        bin_size = 180 / num_bins  # 22.5° per bin
+        
+        # Ensure angles are in 0-180° range
+        angles = angles % 180
+        
+        # Count angles in each bin
+        angle_bins = np.floor(angles / bin_size).astype(int)
+        angle_bins = np.clip(angle_bins, 0, num_bins - 1)
+        
+        # Calculate target count per bin for even distribution
+        total_angles = len(angles)
+        target_per_bin = max(1, total_angles // num_bins)
+        
+        # Redistribute angles to achieve better distribution
+        redistributed_angles = angles.copy()
+        
+        # First pass: identify overcrowded bins
+        bin_counts = np.bincount(angle_bins, minlength=num_bins)
+        
+        for bin_idx in range(num_bins):
+            bin_count = bin_counts[bin_idx]
+            
+            if bin_count > target_per_bin * 1.5:  # If bin is significantly overcrowded
+                # Get indices of angles in this bin
+                bin_mask = angle_bins == bin_idx
+                bin_indices = np.where(bin_mask)[0]
+                
+                # Keep the most central angles in this bin
+                bin_angles = angles[bin_indices]
+                bin_center = (bin_idx + 0.5) * bin_size
+                distances_from_center = np.abs(bin_angles - bin_center)
+                
+                # Sort by distance from bin center
+                sorted_indices = bin_indices[np.argsort(distances_from_center)]
+                
+                # Keep target_per_bin angles, redistribute the rest
+                redistribute_indices = sorted_indices[target_per_bin:]
+                
+                # Redistribute excess angles to less populated bins across the full range
+                for i, idx in enumerate(redistribute_indices):
+                    # Find the least populated bin across the entire range
+                    least_populated_bin = np.argmin(bin_counts)
+                    
+                    # If all bins are equally populated, distribute cyclically
+                    if bin_counts[least_populated_bin] >= target_per_bin:
+                        target_bin = (bin_idx + (i % num_bins)) % num_bins
+                    else:
+                        target_bin = least_populated_bin
+                    
+                    # Move angle to target bin
+                    target_angle = (target_bin + 0.5) * bin_size
+                    # Add small variation to avoid exact clustering
+                    variation = (i % 5 - 2) * 2  # -4, -2, 0, +2, +4 degree variation
+                    new_angle = (target_angle + variation) % 180
+                    
+                    redistributed_angles[idx] = new_angle
+                    angle_bins[idx] = target_bin
+                    
+                    # Update bin counts
+                    bin_counts[bin_idx] -= 1
+                    bin_counts[target_bin] += 1
+        
+        # Second pass: ensure we have representation in all bins
+        empty_bins = np.where(bin_counts == 0)[0]
+        if len(empty_bins) > 0:
+            # Find bins with excess minutiae to redistribute
+            excess_bins = np.where(bin_counts > target_per_bin)[0]
+            
+            for empty_bin in empty_bins:
+                if len(excess_bins) > 0:
+                    # Take one minutia from the most populated excess bin
+                    source_bin = excess_bins[np.argmax(bin_counts[excess_bins])]
+                    source_mask = angle_bins == source_bin
+                    source_indices = np.where(source_mask)[0]
+                    
+                    if len(source_indices) > 0:
+                        # Move one minutia to the empty bin
+                        move_idx = source_indices[0]
+                        target_angle = (empty_bin + 0.5) * bin_size
+                        redistributed_angles[move_idx] = target_angle
+                        angle_bins[move_idx] = empty_bin
+                        
+                        # Update counts
+                        bin_counts[source_bin] -= 1
+                        bin_counts[empty_bin] += 1
+        
+        return redistributed_angles
     
     def quantize_minutiae(self, minutiae_points):
         """
-        Quantize minutiae to a coarser grid for higher robustness - IDENTICAL to ProcessFingerprintTemplateView
+        Quantize minutiae to a coarser grid for higher robustness with improved angle distribution
         """
         quantized = []
-        for x, y, theta in minutiae_points:
+        for i, (x, y, theta) in enumerate(minutiae_points):
             # First extract only the proper 14 bits for coordinates (7 bits high, 8 bits low)
             # In ISO/IEC 19794-2 format, coordinates are 14 bits (7+8)
             x_val = x & 0x3FFF  # Keep only lowest 14 bits
@@ -254,7 +362,14 @@ class VerifyFingerprintView(APIView):
             # Now quantize to 8-pixel grid
             qx = int(round(x_constrained / 8.0) * 8)
             qy = int(round(y_constrained / 8.0) * 8)
-            qtheta = int(round(theta / 10.0) * 10) % 360
+            
+            # IMPROVED ANGLE QUANTIZATION
+            # Use deterministic offset based on position to avoid clustering
+            position_hash = (x_constrained * 31 + y_constrained * 17) % 100  # Deterministic pseudo-random
+            offset = (position_hash / 100.0 - 0.5) * 4  # -2 to +2 degree range
+            
+            # Quantize angle to 10° intervals with position-based offset
+            qtheta = int(((theta + offset + 5) // 10 * 10) % 360)
             
             # Final constraint check (should be unnecessary but kept for safety)
             qx = max(0, min(499, qx))

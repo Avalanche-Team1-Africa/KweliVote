@@ -64,9 +64,111 @@ class FingerprintProcessor:
             raise Exception(f"Failed to extract minutiae: {error_msg}")
 
     @staticmethod
+    def _preserve_angle_diversity(angles: np.ndarray, original_angles: np.ndarray) -> np.ndarray:
+        """
+        Preserve angle diversity by ensuring even distribution across the full 0-180° range.
+        
+        Args:
+            angles: Current angles array
+            original_angles: Original angles for reference
+            
+        Returns:
+            Redistributed angles with better diversity across full range
+        """
+        # Define angle bins (8 bins of 22.5° each for 0-180° range)
+        num_bins = 8
+        bin_size = 180 / num_bins  # 22.5° per bin
+        
+        # Ensure angles are in 0-180° range
+        angles = angles % 180
+        
+        # Count angles in each bin
+        angle_bins = np.floor(angles / bin_size).astype(int)
+        angle_bins = np.clip(angle_bins, 0, num_bins - 1)
+        
+        # Calculate target count per bin for even distribution
+        total_angles = len(angles)
+        target_per_bin = max(1, total_angles // num_bins)
+        
+        # Redistribute angles to achieve better distribution
+        redistributed_angles = angles.copy()
+        
+        # First pass: identify overcrowded bins
+        bin_counts = np.bincount(angle_bins, minlength=num_bins)
+        
+        for bin_idx in range(num_bins):
+            bin_count = bin_counts[bin_idx]
+            
+            if bin_count > target_per_bin * 1.5:  # If bin is significantly overcrowded
+                # Get indices of angles in this bin
+                bin_mask = angle_bins == bin_idx
+                bin_indices = np.where(bin_mask)[0]
+                
+                # Keep the most central angles in this bin
+                bin_angles = angles[bin_indices]
+                bin_center = (bin_idx + 0.5) * bin_size
+                distances_from_center = np.abs(bin_angles - bin_center)
+                
+                # Sort by distance from bin center
+                sorted_indices = bin_indices[np.argsort(distances_from_center)]
+                
+                # Keep target_per_bin angles, redistribute the rest
+                redistribute_indices = sorted_indices[target_per_bin:]
+                
+                # Redistribute excess angles to less populated bins across the full range
+                for i, idx in enumerate(redistribute_indices):
+                    # Find the least populated bin across the entire range
+                    least_populated_bin = np.argmin(bin_counts)
+                    
+                    # If all bins are equally populated, distribute cyclically
+                    if bin_counts[least_populated_bin] >= target_per_bin:
+                        target_bin = (bin_idx + (i % num_bins)) % num_bins
+                    else:
+                        target_bin = least_populated_bin
+                    
+                    # Move angle to target bin
+                    target_angle = (target_bin + 0.5) * bin_size
+                    # Add small variation to avoid exact clustering
+                    variation = (i % 5 - 2) * 2  # -4, -2, 0, +2, +4 degree variation
+                    new_angle = (target_angle + variation) % 180
+                    
+                    redistributed_angles[idx] = new_angle
+                    angle_bins[idx] = target_bin
+                    
+                    # Update bin counts
+                    bin_counts[bin_idx] -= 1
+                    bin_counts[target_bin] += 1
+        
+        # Second pass: ensure we have representation in all bins
+        empty_bins = np.where(bin_counts == 0)[0]
+        if len(empty_bins) > 0:
+            # Find bins with excess minutiae to redistribute
+            excess_bins = np.where(bin_counts > target_per_bin)[0]
+            
+            for empty_bin in empty_bins:
+                if len(excess_bins) > 0:
+                    # Take one minutia from the most populated excess bin
+                    source_bin = excess_bins[np.argmax(bin_counts[excess_bins])]
+                    source_mask = angle_bins == source_bin
+                    source_indices = np.where(source_mask)[0]
+                    
+                    if len(source_indices) > 0:
+                        # Move one minutia to the empty bin
+                        move_idx = source_indices[0]
+                        target_angle = (empty_bin + 0.5) * bin_size
+                        redistributed_angles[move_idx] = target_angle
+                        angle_bins[move_idx] = empty_bin
+                        
+                        # Update counts
+                        bin_counts[source_bin] -= 1
+                        bin_counts[empty_bin] += 1
+        
+        return redistributed_angles
+
+    @staticmethod
     def canonicalize_minutiae(minutiae: List[Tuple[int, int, int]]) -> List[Tuple[int, int, int]]:
         """
-        Canonicalize minutiae using IQR-based orientation estimation.
+        Canonicalize minutiae using IQR-based orientation estimation with improved angle distribution.
         Aligns the principal axis of the fingerprint using the interquartile range.
         
         Args:
@@ -80,6 +182,9 @@ class FingerprintProcessor:
             
         # Convert to numpy array for easier manipulation
         points = np.array(minutiae, dtype=np.float64)
+        
+        # Store original angles for diversity preservation and ensure full range
+        original_angles = points[:, 2].copy() % 180  # Ensure 0-180° range
         
         # Center the points around (0,0) for rotation
         center_x = np.mean(points[:, 0])
@@ -127,34 +232,30 @@ class FingerprintProcessor:
             points[:, 0] = np.clip(rotated_coords[:, 0] + CENTER_X, 0, IMAGE_WIDTH - 1)
             points[:, 1] = np.clip(rotated_coords[:, 1] + CENTER_Y, 0, IMAGE_HEIGHT - 1)
             
-            # Adjust minutiae angles
-            # First convert to radians for proper angle arithmetic
-            angles_rad = np.radians(points[:, 2])
+            # IMPROVED ANGLE PROCESSING - preserve full 0-180° range
             # Rotate angles by the same amount as coordinates
+            angles_rad = np.radians(points[:, 2])
             rotated_angles_rad = angles_rad + theta
-            # Convert back to degrees and normalize to [0, 180)
-            points[:, 2] = (np.degrees(rotated_angles_rad) + 360) % 180
+            rotated_angles = (np.degrees(rotated_angles_rad) + 360) % 180
             
-            # Apply angle spreading to avoid clustering
-            angle_counts = np.histogram(points[:, 2], bins=18, range=(0, 180))[0]
-            if np.max(angle_counts) > len(points) * 0.5:  # If more than 50% angles in one bin
-                # Add small random perturbations to spread the angles
-                points[:, 2] += np.random.uniform(-10, 10, size=len(points))
-                points[:, 2] = points[:, 2] % 180
+            # Apply angle diversity preservation across full range
+            points[:, 2] = FingerprintProcessor._preserve_angle_diversity(rotated_angles, original_angles)
             
         except (np.linalg.LinAlgError, ValueError) as e:
             logger.warning(f"Error in canonicalization: {e}. Using original coordinates.")
             # If rotation fails, just center and clip the points
             points[:, 0] = np.clip(points[:, 0] + CENTER_X, 0, IMAGE_WIDTH - 1)
             points[:, 1] = np.clip(points[:, 1] + CENTER_Y, 0, IMAGE_HEIGHT - 1)
-            points[:, 2] = points[:, 2] % 180
+            # Preserve original angle diversity across full range
+            points[:, 2] = points[:, 2] % 180  # Ensure 0-180° range
+            points[:, 2] = FingerprintProcessor._preserve_angle_diversity(points[:, 2], original_angles)
         
         return [tuple(map(int, point)) for point in points]
 
     @staticmethod
     def quantize_minutiae(minutiae: List[Tuple[int, int, int]]) -> List[Tuple[int, int, int]]:
         """
-        Quantize minutiae coordinates and angles for improved matching stability.
+        Quantize minutiae coordinates and angles with deterministic angle distribution.
         
         Args:
             minutiae: List of (x, y, theta) tuples
@@ -166,7 +267,7 @@ class FingerprintProcessor:
             return []
         
         quantized = []
-        for x, y, theta in minutiae:
+        for i, (x, y, theta) in enumerate(minutiae):
             # Ensure coordinates are within bounds
             x = max(0, min(x, IMAGE_WIDTH - 1))
             y = max(0, min(y, IMAGE_HEIGHT - 1))
@@ -175,19 +276,22 @@ class FingerprintProcessor:
             qx = int(round(x / 8.0) * 8)
             qy = int(round(y / 8.0) * 8)
             
-            # Quantize angle to 10° intervals for finer granularity
-            # Add small random offset to avoid angle clustering
-            offset = np.random.uniform(-2, 2)
+            # IMPROVED ANGLE QUANTIZATION
+            # Use deterministic offset based on position to avoid clustering
+            position_hash = (x * 31 + y * 17) % 100  # Deterministic pseudo-random
+            offset = (position_hash / 100.0 - 0.5) * 4  # -2 to +2 degree range
+            
+            # Quantize angle to 10° intervals with position-based offset
             qtheta = ((theta + offset + 5) // 10 * 10) % 180
             
-            quantized.append((qx, qy, qtheta))
+            quantized.append((qx, qy, int(qtheta)))
         
         return quantized
 
     @staticmethod
     def optimize_minutiae(minutiae: List[Tuple[int, int, int]]) -> List[Tuple[int, int, int]]:
         """
-        Optimize minutiae by selecting the most reliable points.
+        Optimize minutiae by selecting diverse and reliable points.
         
         Args:
             minutiae: List of (x, y, theta) tuples
@@ -202,14 +306,55 @@ class FingerprintProcessor:
         center_x = sum(x for x, _, _ in minutiae) / len(minutiae)
         center_y = sum(y for _, y, _ in minutiae) / len(minutiae)
         
-        # Sort minutiae by distance from center (central minutiae are usually more reliable)
-        sorted_minutiae = sorted(
-            minutiae,
-            key=lambda m: ((m[0] - center_x) ** 2 + (m[1] - center_y) ** 2)
-        )
+        # IMPROVED SELECTION STRATEGY
+        # Balance between central reliability and angle diversity
         
-        # Keep only the most reliable minutiae
-        return sorted_minutiae[:MAX_MINUTIAE]
+        # Group minutiae by angle bins for diversity
+        angle_bins = {}
+        bin_size = 20  # 20-degree bins for diversity
+        
+        for minutia in minutiae:
+            x, y, theta = minutia
+            bin_idx = int(theta // bin_size)
+            if bin_idx not in angle_bins:
+                angle_bins[bin_idx] = []
+            
+            # Calculate reliability score (closer to center = more reliable)
+            distance_from_center = ((x - center_x) ** 2 + (y - center_y) ** 2) ** 0.5
+            max_distance = ((IMAGE_WIDTH/2) ** 2 + (IMAGE_HEIGHT/2) ** 2) ** 0.5
+            reliability = 1.0 - (distance_from_center / max_distance)
+            
+            angle_bins[bin_idx].append((minutia, reliability))
+        
+        # Select minutiae ensuring angle diversity
+        selected_minutiae = []
+        target_per_bin = max(1, MAX_MINUTIAE // len(angle_bins))
+        
+        # First pass: select most reliable from each bin
+        for bin_idx, bin_minutiae in angle_bins.items():
+            # Sort by reliability (higher is better)
+            bin_minutiae.sort(key=lambda x: x[1], reverse=True)
+            
+            # Take up to target_per_bin from this bin
+            for minutia, reliability in bin_minutiae[:target_per_bin]:
+                if len(selected_minutiae) < MAX_MINUTIAE:
+                    selected_minutiae.append(minutia)
+        
+        # Second pass: fill remaining slots with most reliable overall
+        if len(selected_minutiae) < MAX_MINUTIAE:
+            all_remaining = []
+            for bin_minutiae in angle_bins.values():
+                for minutia, reliability in bin_minutiae[target_per_bin:]:
+                    all_remaining.append((minutia, reliability))
+            
+            # Sort by reliability and take the best
+            all_remaining.sort(key=lambda x: x[1], reverse=True)
+            remaining_slots = MAX_MINUTIAE - len(selected_minutiae)
+            
+            for minutia, reliability in all_remaining[:remaining_slots]:
+                selected_minutiae.append(minutia)
+        
+        return selected_minutiae[:MAX_MINUTIAE]
 
     @staticmethod
     def parse_xyt_data(xyt_data: bytes) -> List[Tuple[int, int, int]]:
