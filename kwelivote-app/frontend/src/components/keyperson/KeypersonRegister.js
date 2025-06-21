@@ -230,10 +230,9 @@ const KeypersonRegister = () => {
         // Update an existing keyperson
         const keypersonData = {
           ...formData,
-          // Transform fields to match API expectations
-          designated_polling_station: formData.designatedPollingStation,
-          political_party: formData.politicalParty,
-          observer_type: formData.observerType,
+          // Transform fields to match API expectations - use camelCase
+          // The API expects designatedPollingStation (camelCase) format
+          // formData already has these fields in camelCase, so we use them as-is
           created_by: sessionStorage.getItem('userInfo') 
             ? JSON.parse(sessionStorage.getItem('userInfo')).username || 'anonymous' 
             : 'anonymous'
@@ -255,10 +254,8 @@ const KeypersonRegister = () => {
           // Create keyperson and user in a single transaction
           const keypersonData = {
             ...formData,
-            // Transform fields to match API expectations
-            designated_polling_station: formData.designatedPollingStation,
-            political_party: formData.politicalParty,
-            observer_type: formData.observerType,
+            // The API now expects fields in camelCase format
+            // formData already has these fields in camelCase, so we use them as-is
             created_by: sessionStorage.getItem('userInfo') 
               ? JSON.parse(sessionStorage.getItem('userInfo')).username || 'anonymous' 
               : 'anonymous'
@@ -278,10 +275,8 @@ const KeypersonRegister = () => {
           // For Observers, only create keyperson (no user account)
           const keypersonData = {
             ...formData,
-            // Transform fields to match API expectations
-            designated_polling_station: formData.designatedPollingStation,
-            political_party: formData.politicalParty,
-            observer_type: formData.observerType,
+            // The API now expects fields in camelCase format
+            // formData already has these fields in camelCase, so we use them as-is
             created_by: sessionStorage.getItem('userInfo') 
               ? JSON.parse(sessionStorage.getItem('userInfo')).username || 'anonymous' 
               : 'anonymous'

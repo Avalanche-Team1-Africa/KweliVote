@@ -376,17 +376,23 @@ export const keypersonAPI = {
     delete keypersonData.blockchain_tx_id;
     delete keypersonData.blockchain_subnet_id;
 
-    // Convert camelCase field names to snake_case for backend
+    // Important: We need to ensure consistency in field names - 
+    // The backend expects designatedPollingStation (camelCase), not designated_polling_station (snake_case)
     const transformedData = {
       ...keypersonData,
-      designated_polling_station: keypersonData.designatedPollingStation,
-      political_party: keypersonData.politicalParty,
-      observer_type: keypersonData.observerType,
+      // Ensure we use camelCase for the API
+      designatedPollingStation: keypersonData.designatedPollingStation || keypersonData.designated_polling_station,
+      politicalParty: keypersonData.politicalParty || keypersonData.political_party,
+      observerType: keypersonData.observerType || keypersonData.observer_type,
       // Get current user info for created_by field
       created_by: JSON.parse(sessionStorage.getItem('userInfo') || '{}').username || 'system',
     };
     
-    // Remove the camelCase fields to avoid duplications
+    // Remove the snake_case fields to avoid duplications
+    delete transformedData.designated_polling_station;
+    delete transformedData.political_party;
+    delete transformedData.observer_type;
+    // Also remove the camelCase fields that we've already copied to avoid duplications
     delete transformedData.designatedPollingStation;
     delete transformedData.politicalParty;
     delete transformedData.observerType;
@@ -412,17 +418,24 @@ export const keypersonAPI = {
     delete keypersonData.blockchain_tx_id;
     delete keypersonData.blockchain_subnet_id;
     
-    // Convert camelCase field names to snake_case for backend
+    // Important: We need to ensure consistency in field names - 
+    // The backend expects designatedPollingStation (camelCase), not designated_polling_station (snake_case)
     const transformedData = {
       ...keypersonData,
-      designated_polling_station: keypersonData.designatedPollingStation,
-      political_party: keypersonData.politicalParty,
-      observer_type: keypersonData.observerType,
+      // Only use the designated_polling_station field if designatedPollingStation isn't already present
+      // This ensures we don't accidentally overwrite the camelCase version
+      designatedPollingStation: keypersonData.designatedPollingStation || keypersonData.designated_polling_station,
+      politicalParty: keypersonData.politicalParty || keypersonData.political_party,
+      observerType: keypersonData.observerType || keypersonData.observer_type,
       // Get current user info for created_by field
       created_by: JSON.parse(sessionStorage.getItem('userInfo') || '{}').username || 'system',
     };
     
-    // Remove the camelCase fields to avoid duplications
+    // Remove the snake_case fields to avoid duplications
+    delete transformedData.designated_polling_station;
+    delete transformedData.political_party;
+    delete transformedData.observer_type;
+    // Also remove the camelCase fields to avoid duplications
     delete transformedData.designatedPollingStation;
     delete transformedData.politicalParty;
     delete transformedData.observerType;
