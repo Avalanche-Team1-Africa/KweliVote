@@ -49,7 +49,7 @@ OUTPUT_DIR = "docs/fingerprint_reader/test_output"
 TEST_NATIONAL_ID = "TEST12345678"
 AUTH_CREDENTIALS = {
     "username": "john_0001",
-    "password": "KV2025_xV3cfqgQlV"
+    "password": "eCb*Y3cuXZph"
 }
 
 # Ensure output directory exists

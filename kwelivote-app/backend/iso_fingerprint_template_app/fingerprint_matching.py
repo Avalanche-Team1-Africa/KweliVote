@@ -579,7 +579,21 @@ class VerifyFingerprintView(APIView):
             
             # Get parameters
             national_id = request.data.get('nationalId')
-            fingerprints = request.data.get('fingerprints', [])
+            
+            # Handle fingerprints data which might be a JSON string
+            fingerprints_data = request.data.get('fingerprints', [])
+            if isinstance(fingerprints_data, str):
+                try:
+                    import json
+                    fingerprints = json.loads(fingerprints_data)
+                except Exception as e:
+                    logger.error(f"Error parsing fingerprints JSON: {str(e)}")
+                    return Response({
+                        'error': f'Invalid fingerprints data format: {str(e)}'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                fingerprints = fingerprints_data
+                
             template = request.data.get('template', None)
             threshold = int(request.data.get('threshold', 40))
             extract_only = request.data.get('extract_only', False)
@@ -607,22 +621,26 @@ class VerifyFingerprintView(APIView):
                 # === STEP 3: Individual Fingerprint Processing Loop ===
                 # Process each fingerprint (IDENTICAL to ProcessFingerprintTemplateView)
                 for idx, fp in enumerate(fingerprints):
-                    base64_img = fp.get('sample', '')
+                    # Handle fp which could be a string or dictionary
+                    if isinstance(fp, str):
+                        base64_img = fp
+                    else:
+                        base64_img = fp.get('sample', '')
+                        
                     if not base64_img:
+                        logger.warning(f"Empty fingerprint data for fingerprint {idx + 1}, skipping")
                         continue
+                    
+                    logger.info(f"Processing fingerprint {idx + 1}, data type: {type(base64_img)}, length: {len(base64_img)} characters")
                     
                     # === 3.1 Base64 Decoding & Image Preparation ===
                     # (IDENTICAL to ProcessFingerprintTemplateView)
                     try:
-                        # Remove any potential data URL prefix
-                        if ',' in base64_img:
-                            base64_img = base64_img.split(',', 1)[1]
-                        
-                        image_data = base64.b64decode(base64_img)
-                        # Normalize image before saving (IDENTICAL normalization)
-                        image_data = normalize_image(image_data)
+                        # Use normalize_image which now handles both base64 strings and raw bytes
+                        image_data = normalize_image(base64_img)
+                        logger.info(f"Successfully normalized image for fingerprint {idx + 1}: {len(image_data)} bytes")
                     except Exception as e:
-                        logger.error(f"Failed to decode/normalize base64 image for fingerprint {idx + 1}: {str(e)}")
+                        logger.error(f"Failed to decode/normalize image for fingerprint {idx + 1}: {str(e)}")
                         continue
                     
                     # Save decoded image directly as PNG - no conversion needed (IDENTICAL to enrollment)

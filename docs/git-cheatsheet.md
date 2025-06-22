@@ -10,6 +10,11 @@ This cheatsheet provides a guide for working with the KweliVote repository using
 ## Basic Git Commands
 
 ```
+# Setup two identical remote repos and make sure we push to both simultaneously
+git remote set-url --add --push origin https://github.com/snjiraini/KweliVote.git
+git remote set-url --add --push origin https://github.com/Avalanche-Team1-Africa/KweliVote.git
+git push --force origin main
+
 # Check the status of your working directory
 git status
 
@@ -137,6 +142,11 @@ git push origin dev
 git add <resolved-files>
 git commit  # For merge
 git rebase --continue  # For rebase
+
+#Discard Local Changes, Take Incoming Branch (Hard Reset)
+git checkout main
+git reset --hard feature
+git push --force origin main
 ```
 
 ### Undoing Changes

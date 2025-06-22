@@ -26,29 +26,54 @@ these functions must be thoroughly tested to ensure it doesn't reduce match accu
 def normalize_image(image_data):
     """
     Normalize image data to ensure consistent format.
-    Assumes input image is already grayscale with 8-bit depth.
+    Handles both raw image data bytes and base64-encoded strings.
     
     Args:
-        image_data: Raw image data bytes
+        image_data: Raw image data bytes or base64-encoded string
         
     Returns:
         Normalized image data bytes
     """
     try:
+        # Check if input is a base64-encoded string
+        if isinstance(image_data, str):
+            # Remove any potential data URL prefix
+            if ',' in image_data:
+                image_data = image_data.split(',', 1)[1]
+            
+            try:
+                # Decode base64 to bytes
+                image_data = base64.b64decode(image_data)
+                logger.info(f"Successfully decoded base64 string to image data: {len(image_data)} bytes")
+            except Exception as e:
+                logger.error(f"Failed to decode base64 string: {str(e)}")
+                raise
+        
         # Open image from bytes
         with Image.open(BytesIO(image_data)) as img:
             # Convert to RGB mode if needed (some PNG files might be in RGBA)
             if img.mode == 'RGBA':
                 img = img.convert('RGB')
+            elif img.mode != 'RGB' and img.mode != 'L':
+                # Convert any other mode to RGB
+                img = img.convert('RGB')
             
             # Resize to standard dimensions if needed
             if img.size != (500, 550):
+                logger.info(f"Resizing image from {img.size} to (500, 550)")
                 img = img.resize((500, 550), Image.Resampling.LANCZOS)
+            
+            # Convert to grayscale if not already
+            if img.mode != 'L':
+                img = img.convert('L')
+                logger.info("Converted image to grayscale (8-bit)")
             
             # Save normalized image
             output = BytesIO()
             img.save(output, format='PNG')
-            return output.getvalue()
+            normalized_data = output.getvalue()
+            logger.info(f"Normalized image size: {len(normalized_data)} bytes")
+            return normalized_data
             
     except Exception as e:
         logger.error(f"Error normalizing image: {str(e)}")
@@ -69,6 +94,33 @@ def extract_minutiae(image_path, output_dir):
     
     logger.info(f"Extracting minutiae from image: {os.path.basename(image_path)}")
     logger.info(f"Image size: {os.path.getsize(image_path)} bytes")
+    
+    # First, check if the image file actually exists and is readable
+    if not os.path.isfile(image_path):
+        logger.error(f"Image file does not exist: {image_path}")
+        raise FileNotFoundError(f"Image file does not exist: {image_path}")
+    
+    if os.path.getsize(image_path) == 0:
+        logger.error(f"Image file is empty: {image_path}")
+        raise ValueError(f"Image file is empty: {image_path}")
+        
+    # Verify the image is readable by PIL before proceeding
+    try:
+        with Image.open(image_path) as img:
+            img_width, img_height = img.size
+            img_mode = img.mode
+            logger.info(f"Image successfully read: size={img_width}x{img_height}, mode={img_mode}")
+    except Exception as e:
+        logger.error(f"Failed to read image with PIL: {str(e)}")
+        raise ValueError(f"Invalid image file: {str(e)}")
+    
+    # Create a backup of the image for debugging
+    debug_img_path = os.path.join(output_dir, "debug_input_image.png")
+    try:
+        shutil.copy(image_path, debug_img_path)
+        logger.info(f"Created backup of input image at {debug_img_path}")
+    except Exception as e:
+        logger.warning(f"Could not create backup of input image: {str(e)}")
     
     try:
         # Log detailed parameters used for minutiae extraction

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { voterAPI, keypersonAPI } from '../../utils/api';
 import blockchainService from '../../services/BlockchainService';
 import FingerprintEnrollmentForDataViewer from './FingerprintEnrollmentForDataViewer';
+import { getAuthToken } from '../../utils/auth';
+import { API_BASE_URL } from '../../utils/api';
 
 // Debug logger for fingerprint operations - helps with troubleshooting
 const logFingerprintDebug = (message, data = null) => {
@@ -180,6 +182,131 @@ const DataViewer = () => {
     setFingerprintError('');
   };
   
+  // Verify fingerprint with backend API
+  const verifyFingerprintWithBackend = async () => {
+    if (!validatingVoter) {
+      throw new Error('No voter data available for validation');
+    }
+    
+    if (!fingerprintTemplate && !fingerprintImage) {
+      throw new Error('No fingerprint data available for verification');
+    }
+    
+    setIsValidating(true);
+    
+    try {
+      const nationalId = validatingVoter.nationalid || validatingVoter.national_id;
+      if (!nationalId) {
+        throw new Error('National ID not found for voter');
+      }
+      
+      // Create form data with fingerprint and national ID
+      const formData = new FormData();
+      
+      // Create fingerprints array as expected by the backend
+      const fingerprints = [];
+      
+      if (fingerprintTemplate) {
+        // For template-based verification (from fingerprint reader)
+        const templateStr = JSON.stringify(fingerprintTemplate);
+        
+        // Add to fingerprints array as expected by backend
+        fingerprints.push({
+          sample: templateStr,
+          type: 'template'
+        });
+        
+        // Also include template for backward compatibility
+        formData.append('template', templateStr);
+      } else if (fingerprintImage) {
+        // For image-based verification (from file upload)
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          
+          reader.onloadend = async () => {
+            try {
+              const base64String = reader.result;
+              
+              // Add to fingerprints array as expected by backend
+              fingerprints.push({
+                sample: base64String,
+                type: 'image'
+              });
+              
+              // Add fingerprint for backward compatibility
+              formData.append('fingerprint', fingerprintImage);
+              
+              // Add fingerprints array and national ID
+              formData.append('fingerprints', JSON.stringify(fingerprints));
+              formData.append('nationalId', nationalId);
+              
+              // Make API request
+              const response = await fetch(`${API_BASE_URL}/fingerprints/verify-fingerprint/`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${getAuthToken()}`
+                },
+                body: formData
+              });
+              
+              if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `Failed to verify fingerprint: ${response.status}`);
+              }
+              
+              const result = await response.json();
+              logFingerprintDebug('Fingerprint verification result', result);
+              
+              if (!result.match_success) {
+                throw new Error('Fingerprint verification failed: No match found');
+              }
+              
+              resolve(result);
+            } catch (error) {
+              reject(error);
+            }
+          };
+          
+          reader.onerror = () => {
+            reject(new Error('Failed to read fingerprint image'));
+          };
+          
+          reader.readAsDataURL(fingerprintImage);
+        });
+      }
+      
+      // For template case, add fingerprints array and continue with API call
+      formData.append('fingerprints', JSON.stringify(fingerprints));
+      formData.append('nationalId', nationalId);
+      
+      // Make API request for template case
+      const response = await fetch(`${API_BASE_URL}/fingerprints/verify-fingerprint/`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${getAuthToken()}`
+        },
+        body: formData
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to verify fingerprint: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      logFingerprintDebug('Fingerprint verification result', result);
+      
+      if (!result.match_success) {
+        throw new Error('Fingerprint verification failed: No match found');
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Error verifying fingerprint:', error);
+      throw error;
+    }
+  };
+  
   // Proceed to blockchain verification after successful fingerprint verification
   const proceedToBlockchainVerification = async () => {
     if (!validatingVoter) {
@@ -195,11 +322,55 @@ const DataViewer = () => {
         throw new Error('National ID not found for voter');
       }
       
-      const result = await blockchainService.verifyVoterDID(nationalId);
-      setValidationResult(result);
+      // Step 1: Verify fingerprint against backend
+      logFingerprintDebug('Starting fingerprint verification against backend');
+      const fingerprintResult = await verifyFingerprintWithBackend();
+      
+      if (!fingerprintResult.match_success) {
+        throw new Error('Fingerprint verification failed: No match found');
+      }
+      
+      // Step 2: Get local DID from the verified fingerprint
+      const localDID = fingerprintResult.did || validatingVoter.did;
+      if (!localDID) {
+        throw new Error('No DID available for verification');
+      }
+      
+      // Step 3: Verify the DID against blockchain
+      logFingerprintDebug('Starting blockchain DID verification');
+      const blockchainResult = await blockchainService.verifyVoterDID(nationalId);
+      
+      // Step 4: Compare local DID with blockchain DID
+      if (!blockchainResult.did) {
+        throw new Error('DID not found on blockchain');
+      }
+      
+      const didMatch = blockchainResult.did === localDID;
+      
+      // Set the combined validation result
+      setValidationResult({
+        ...blockchainResult,
+        fingerprint_verified: fingerprintResult.match_success,
+        did_match: didMatch,
+        validation_complete: fingerprintResult.match_success && didMatch,
+        local_did: localDID,
+        blockchain_did: blockchainResult.did
+      });
+      
+      if (!didMatch) {
+        console.warn('DID mismatch detected', { 
+          localDID, 
+          blockchainDID: blockchainResult.did 
+        });
+        setError('DID verification failed: The fingerprint matches but the blockchain DID does not match the local DID');
+      }
     } catch (err) {
-      console.error('Error verifying voter DID:', err);
-      setError(`Failed to verify voter: ${err.message}`);
+      console.error('Error during voter validation:', err);
+      setError(`Validation failed: ${err.message}`);
+      setValidationResult({
+        validation_complete: false,
+        error: err.message
+      });
     } finally {
       setIsValidating(false);
     }
@@ -475,11 +646,95 @@ const DataViewer = () => {
           <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-bold text-kweli-dark">
-                Biometric Verification
+                {validationResult ? 'Validation Results' : 'Biometric Verification'}
               </h3>
             </div>
             
-            {validatingVoter && (
+            {validationResult ? (
+              <div className="animate-fade-in">
+                <div className="mb-6 p-4 rounded-lg border-2 border-gray-100 bg-gray-50">
+                  <div className="flex flex-col space-y-4">
+                    {/* Fingerprint Verification Result */}
+                    <div className="flex items-center">
+                      <div className={`h-8 w-8 rounded-full flex items-center justify-center mr-3 ${validationResult.fingerprint_verified ? 'bg-green-100' : 'bg-red-100'}`}>
+                        {validationResult.fingerprint_verified ? (
+                          <svg className="h-5 w-5 text-green-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                        ) : (
+                          <svg className="h-5 w-5 text-red-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                          </svg>
+                        )}
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-gray-900">Fingerprint Verification</h4>
+                        <p className="text-sm text-gray-600">
+                          {validationResult.fingerprint_verified 
+                            ? 'Fingerprint successfully verified' 
+                            : 'Fingerprint verification failed'}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {/* DID Verification Result */}
+                    <div className="flex items-center">
+                      <div className={`h-8 w-8 rounded-full flex items-center justify-center mr-3 ${validationResult.did_match ? 'bg-green-100' : 'bg-red-100'}`}>
+                        {validationResult.did_match ? (
+                          <svg className="h-5 w-5 text-green-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                        ) : (
+                          <svg className="h-5 w-5 text-red-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                          </svg>
+                        )}
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-gray-900">DID Verification</h4>
+                        <p className="text-sm text-gray-600">
+                          {validationResult.did_match 
+                            ? 'DID successfully verified on blockchain' 
+                            : 'DID verification failed'}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {/* Final Validation Result */}
+                    <div className="flex items-center">
+                      <div className={`h-8 w-8 rounded-full flex items-center justify-center mr-3 ${validationResult.validation_complete ? 'bg-green-100' : 'bg-red-100'}`}>
+                        {validationResult.validation_complete ? (
+                          <svg className="h-5 w-5 text-green-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                        ) : (
+                          <svg className="h-5 w-5 text-red-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                          </svg>
+                        )}
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-gray-900">Final Validation</h4>
+                        <p className="text-sm text-gray-600">
+                          {validationResult.validation_complete 
+                            ? 'Voter successfully validated' 
+                            : 'Voter validation failed'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex justify-center">
+                  <button
+                    onClick={handleCloseValidation}
+                    className="px-4 py-2 text-sm font-medium text-white bg-kweli-primary rounded-lg shadow-soft hover:bg-kweli-secondary transition-all duration-200"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            ) : (
               <div className="animate-fade-in">
                 <div className="mb-4">
                   <p className="text-sm text-gray-600 mb-4">
