@@ -1,8 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import FingerprintEnrollment from './FingerprintEnrollment';
+import React, { useState, useEffect, useRef } from 'react';
+import BiometricInput from '../shared/BiometricInput';
 import biometricToDID from '../../utils/biometricToDID';
-import apiServices from '../../utils/api';
-import blockchainService from '../../services/BlockchainService';
 
 const VoterStep2 = ({ formData, prevStep, handleSubmit, isSubmitting = false, onEnrollmentComplete, onDIDGenerated, isEditMode }) => {
   const [fingerprintTemplate, setFingerprintTemplate] = useState(null);
@@ -12,10 +10,11 @@ const VoterStep2 = ({ formData, prevStep, handleSubmit, isSubmitting = false, on
   const [currentStep, setCurrentStep] = useState(null);
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [localFingerprintError, setLocalFingerprintError] = useState('');
-  const [blockchainTxInfo, setBlockchainTxInfo] = useState(null);
-  const [isSavingToBlockchain, setIsSavingToBlockchain] = useState(false);
-  const [blockchainAddress, setBlockchainAddress] = useState('');
-  const [blockchainError, setBlockchainError] = useState('');
+  
+  // Add a processing flag ref to prevent multiple executions
+  const isProcessingRef = useRef(false);
+  // Add template ID tracking to avoid reprocessing the same template
+  const processedTemplateIdRef = useRef(null);
 
   useEffect(() => {
     // Debug log to check if environment variables are loaded
@@ -38,218 +37,113 @@ const VoterStep2 = ({ formData, prevStep, handleSubmit, isSubmitting = false, on
     e.preventDefault();
     prevStep();
   };
+  
+  const handleFormSubmit = (e) => {
+    if (e) e.preventDefault();
+    if (handleSubmit) {
+      handleSubmit(e);
+    }
+  };
 
   useEffect(() => {
-    if (fingerprintTemplate && formData.nationalid) {
-      try {
-        setConversionLog([]);
-        setCurrentStep('fingerprint');
-        setLocalFingerprintError(''); // Clear any previous errors
+    // Skip processing if we're already processing or if this template was already processed
+    if (isProcessingRef.current || 
+        !fingerprintTemplate || 
+        !formData.nationalid ||
+        (processedTemplateIdRef.current === fingerprintTemplate.iso_template_id)) {
+      return;
+    }
 
-        // Log the final fingerprint template
-        console.log('Final fingerprint template generated:', JSON.stringify(fingerprintTemplate, null, 2));
-        
-        // Verify that we have an ISO template from the API
-        if (!fingerprintTemplate.iso_template_base64) {
-          throw new Error('Missing ISO template base64 data from the API');
-        }
-        
-        console.log('Using received base64 ISO template from API for DID generation');
+    // Set processing flag to true to prevent re-entry
+    isProcessingRef.current = true;
+    
+    try {
+      setConversionLog([]);
+      setCurrentStep('fingerprint');
+      setLocalFingerprintError(''); // Clear any previous errors
 
-        // Improved step detection with alternative pattern matching
-        const originalConsoleLog = console.log;
-        console.log = (message) => {
-          originalConsoleLog(message);
-          if (typeof message === 'string') {
-            // Enhanced pattern matching for step detection
-            if (message.includes("STEP 1") || message.includes("Extracting standardized ISO template")) {
-              setCurrentStep('template');
-              setConversionLog(prevLogs => [...prevLogs, "STEP 1: Extracting ISO template"]);
-            }
-            else if (message.includes("STEP 2") || message.includes("Generating stable secret key")) {
-              setCurrentStep('secretKey');
-              setConversionLog(prevLogs => [...prevLogs, "STEP 2: Generating stable secret key"]);
-            }
-            else if (message.includes("STEP 3") || message.includes("hash") || message.includes("SHA-256")) {
-              setCurrentStep('hash');
-              setConversionLog(prevLogs => [...prevLogs, "STEP 3: Creating cryptographic hash"]);
-            }
-            else if (message.includes("STEP 4") || message.includes("Deriving") || message.includes("key pair")) {
-              setCurrentStep('keyPair');
-              setConversionLog(prevLogs => [...prevLogs, "STEP 4: Generating cryptographic keypair"]);
-            }
-            else if (message.includes("STEP 6") || message.includes("DID:key") || message.includes("Generating DID")) {
-              setCurrentStep('did');
-              setConversionLog(prevLogs => [...prevLogs, "STEP 6: Creating DID from public key"]);
-            }
-            else if (message.includes("Starting biometric") || message.includes("✅") || message.includes("completed successfully")) {
-              setConversionLog(prevLogs => [...prevLogs, message]);
-            }
+      // Store the template ID we're processing
+      if (fingerprintTemplate.iso_template_id) {
+        processedTemplateIdRef.current = fingerprintTemplate.iso_template_id;
+      }
+
+      // Log the final fingerprint template
+      console.log('Final fingerprint template generated:', JSON.stringify(fingerprintTemplate, null, 2));
+      
+      // Verify that we have an ISO template from the API
+      if (!fingerprintTemplate.iso_template_base64) {
+        throw new Error('Missing ISO template base64 data from the API');
+      }
+      
+      console.log('Using received base64 ISO template from API for DID generation');
+
+      // Improved step detection with alternative pattern matching
+      const originalConsoleLog = console.log;
+      console.log = (message) => {
+        originalConsoleLog(message);
+        if (typeof message === 'string') {
+          // Enhanced pattern matching for step detection
+          if (message.includes("STEP 1") || message.includes("Extracting standardized ISO template")) {
+            setCurrentStep('template');
+            setConversionLog(prevLogs => [...prevLogs, "STEP 1: Extracting ISO template"]);
           }
-        };
-
-        // Force a small delay to ensure UI can show the initial step before proceeding
-        setTimeout(() => {
-          try {
-            const result = biometricToDID(fingerprintTemplate, formData.nationalid);
-            setDidResult(result);
-            
-            // Force the last step to be marked as complete
+          else if (message.includes("STEP 2") || message.includes("Generating stable secret key")) {
+            setCurrentStep('secretKey');
+            setConversionLog(prevLogs => [...prevLogs, "STEP 2: Generating stable secret key"]);
+          }
+          else if (message.includes("STEP 3") || message.includes("hash") || message.includes("SHA-256")) {
+            setCurrentStep('hash');
+            setConversionLog(prevLogs => [...prevLogs, "STEP 3: Creating cryptographic hash"]);
+          }
+          else if (message.includes("STEP 4") || message.includes("Deriving") || message.includes("key pair")) {
+            setCurrentStep('keyPair');
+            setConversionLog(prevLogs => [...prevLogs, "STEP 4: Generating cryptographic keypair"]);
+          }
+          else if (message.includes("STEP 6") || message.includes("DID:key") || message.includes("Generating DID")) {
             setCurrentStep('did');
-            
-            if (onDIDGenerated) {
-              onDIDGenerated(result);
-            }
-          } catch (error) {
-            console.error('Error during biometric to DID conversion:', error);
-            setConversionLog(prevLogs => [...prevLogs, `Error: ${error.message}`]);
-            setLocalFingerprintError(`Error during biometric to DID conversion: ${error.message}`);
+            setConversionLog(prevLogs => [...prevLogs, "STEP 6: Creating DID from public key"]);
           }
+          else if (message.includes("Starting biometric") || message.includes("✅") || message.includes("completed successfully")) {
+            setConversionLog(prevLogs => [...prevLogs, message]);
+          }
+        }
+      };
+
+      // Force a small delay to ensure UI can show the initial step before proceeding
+      setTimeout(() => {
+        try {
+          const result = biometricToDID(fingerprintTemplate, formData.nationalid);
+          setDidResult(result);
           
+          // Force the last step to be marked as complete
+          setCurrentStep('did');
+          
+          if (onDIDGenerated) {
+            onDIDGenerated(result);
+          }
+        } catch (error) {
+          console.error('Error during biometric to DID conversion:', error);
+          setConversionLog(prevLogs => [...prevLogs, `Error: ${error.message}`]);
+          setLocalFingerprintError(`Error during biometric to DID conversion: ${error.message}`);
+        } finally {
           // Restore original console.log
           console.log = originalConsoleLog;
-        }, 100);
-      } catch (error) {
-        console.error('Error during biometric to DID conversion:', error);
-        setConversionLog(prevLogs => [...prevLogs, `Error: ${error.message}`]);
-        setLocalFingerprintError(`Error during biometric to DID conversion: ${error.message}`);
-      }
+          // Reset the processing flag when done
+          isProcessingRef.current = false;
+        }
+      }, 100);
+    } catch (error) {
+      console.error('Error during biometric to DID conversion:', error);
+      setConversionLog(prevLogs => [...prevLogs, `Error: ${error.message}`]);
+      setLocalFingerprintError(`Error during biometric to DID conversion: ${error.message}`);
+      // Reset the processing flag on error
+      isProcessingRef.current = false;
     }
   }, [fingerprintTemplate, formData.nationalid, onDIDGenerated]);
 
-  const handleFormSubmit = (e) => {
-    e.preventDefault();
-    
-    // First call the parent's handleSubmit to save/update the voter
-    handleSubmit(e);
-    
-    // After a short delay to ensure the voter has been created/updated
-    setTimeout(() => {
-      // Show success message with blockchain details for both new and existing voters
-      // Only proceed with biometric data if we have both DID and template
-      if (didResult && fingerprintTemplate?.iso_template_base64) {
-        console.log('Submitting with DID:', didResult.didKey);
-        
-        // Access voter ID from formData, which should be updated after voter creation/update
-        const voterId = formData.id || formData.nationalid;
-        
-        if (voterId) {
-          const biometricData = {
-            did: didResult.didKey,
-            biometric_template: fingerprintTemplate.iso_template_base64
-          };
-          
-          // Set loading state for blockchain
-          setIsSavingToBlockchain(true);
-          setBlockchainError('');
-          
-          // Initialize blockchain service
-          blockchainService.initialize().then(isInitialized => {
-            if (isInitialized) {
-              // For voters, we now use a derived address from the DID itself
-              // since we don't generate public/private keys for voters anymore
-              const didHash = didResult.didKey.substring(didResult.didKey.lastIndexOf(':') + 1);
-              const address = `0x${didHash.substring(0, 40)}`;
-              setBlockchainAddress(address);
-              
-              // For demo purposes, we use a development private key
-              // In production, this should be securely managed by an admin
-              // This is a test private key with no real funds - NEVER use this in production
-              const adminPrivateKey = process.env.REACT_APP_ADMIN_PRIVATE_KEY || 
-                'A7b9f6989ff480042ecfdb0f1aee605ec59a6b0937adf9264e4c6fbbfef295bc'; // Fallback key for development only
-              
-              console.log('Using private key for blockchain operation');
-
-              // Import the private key for signing
-              const importResult = blockchainService.importPrivateKey(adminPrivateKey);
-              if (!importResult.success) {
-                throw new Error(`Failed to import admin key: ${importResult.error}`);
-              }
-              
-              // Save DID to blockchain
-              return blockchainService.storeDID(voterId, didResult.didKey);
-            } else {
-              throw new Error('Failed to initialize blockchain connection');
-            }
-          }).then(result => {
-            if (result.success) {
-              // Store blockchain transaction information
-              setBlockchainTxInfo({
-                transactionHash: result.transactionHash,
-                blockNumber: result.blockNumber
-              });
-              
-              // Get blockchain network information
-              const networkInfo = blockchainService.getNetworkInfo();
-              
-              // Update the voter record with the blockchain transaction ID and network name
-              return apiServices.voter.updateVoter(voterId, {
-                blockchain_tx_id: result.transactionHash,
-                blockchain_subnet_id: networkInfo.name || 'Avalanche C-Chain'
-              });
-            } else {
-              throw new Error(result.error || 'Failed to store DID on blockchain');
-            }
-          })
-          .then(() => {
-            // After updating the blockchain_tx_id, save biometric data
-            // This works for both new and existing voters
-            return apiServices.voter.saveBiometricData(voterId, biometricData);
-          })
-          .then(response => {
-            console.log('Data saved successfully:', response);
-            console.log('Blockchain transaction details:', blockchainTxInfo);
-            console.log('DID result:', didResult);
-            console.log('Blockchain address:', blockchainAddress);
-            
-            // Ensure we have transaction info for display (this would be available for both new and existing voters)
-            if (blockchainTxInfo) {
-              console.log('Blockchain transaction hash available for display:', blockchainTxInfo.transactionHash);
-            }
-            
-            // Show success modal with all required information
-            setShowSuccessMessage(true);
-            setIsSavingToBlockchain(false);
-            
-            setTimeout(() => {
-              setShowSuccessMessage(false);
-            }, 10000); // Show for longer (10 seconds) to give users time to read the blockchain details
-          })
-          .catch(error => {
-            console.error('Error saving data:', error);
-            setLocalFingerprintError(`Failed to save data: ${error.message || 'Unknown error'}`);
-            setBlockchainError(error.message || 'Failed to store DID on blockchain');
-            setIsSavingToBlockchain(false);
-          });
-        } else {
-          console.error('Cannot save biometric data: No voter ID available');
-          setLocalFingerprintError('Cannot save biometric data: No voter ID available');
-        }
-      } else {
-        // If no biometric data is available, still show success message
-        // as the voter details might have been saved successfully
-        
-        // Generate placeholder blockchain details for display consistency
-        if (!blockchainAddress && didResult) {
-          const didHash = didResult.didKey.substring(didResult.didKey.lastIndexOf(':') + 1);
-          const address = `0x${didHash.substring(0, 40)}`;
-          setBlockchainAddress(address);
-        }
-        
-        // Show the success message with whatever blockchain information we have
-        setShowSuccessMessage(true);
-        
-        // For consistency with the biometric flow, show for 10 seconds for both new and existing voters
-        setTimeout(() => {
-          setShowSuccessMessage(false);
-        }, 10000);
-      }
-    }, 500); // Short delay to ensure voter is saved first
-  };
-
-  const handleEnrollmentComplete = (templateData) => {
+  const handleBiometricCaptured = (templateData) => {
     // Process fingerprint templates and generate DID
-    console.log('Biometric enrollment completed, setting template data');
+    console.log('Biometric data captured, setting template data');
     setFingerprintTemplate(templateData);
     
     if (onEnrollmentComplete) {
@@ -306,26 +200,6 @@ const VoterStep2 = ({ formData, prevStep, handleSubmit, isSubmitting = false, on
                       </div>
                     </div>
                   )}
-                  
-                  {/* Blockchain Address */}
-                  {blockchainAddress && (
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500">BLOCKCHAIN ADDRESS</label>
-                      <div className="font-mono text-xs bg-white p-2 rounded border border-gray-200 mt-1 truncate">
-                        {blockchainAddress}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Transaction Info */}
-                  {blockchainTxInfo && (
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500">TRANSACTION HASH</label>
-                      <div className="font-mono text-xs bg-white p-2 rounded border border-gray-200 mt-1 truncate">
-                        {blockchainTxInfo.transactionHash}
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
               
@@ -364,14 +238,15 @@ const VoterStep2 = ({ formData, prevStep, handleSubmit, isSubmitting = false, on
         <p className="text-gray-600 mb-4 text-sm">
           {isEditMode 
             ? 'Update biometric data if needed or skip this step to keep existing biometric data.' 
-            : 'Please use the fingerprint reader to collect biometric data for voter registration.'}
+            : 'Please use the fingerprint reader or upload a fingerprint image for voter registration.'}
         </p>
         
-        <FingerprintEnrollment 
-          nationalId={formData.nationalid} 
-          onEnrollmentComplete={handleEnrollmentComplete}
-          requiredScans={5}
-        />
+        <div className="mb-6">
+          <BiometricInput 
+            nationalId={formData.nationalid} 
+            onBiometricCaptured={handleBiometricCaptured}
+          />
+        </div>
         
         {fingerprintTemplate && (
           <div className="mt-6 bg-gradient-to-r from-indigo-50 to-blue-50 p-4 rounded-lg border border-blue-100">
@@ -544,16 +419,16 @@ const VoterStep2 = ({ formData, prevStep, handleSubmit, isSubmitting = false, on
         <button
           type="button"
           onClick={handleFormSubmit}
-          disabled={isSubmitting || isSavingToBlockchain}
-          className={`flex items-center bg-gradient-to-r from-kweli-accent to-kweli-primary text-white font-medium py-2.5 px-6 rounded-lg shadow-soft hover:shadow-soft-md transition-all duration-300 transform hover:-translate-y-0.5 ${(isSubmitting || isSavingToBlockchain) ? 'opacity-80' : ''}`}
+          disabled={isSubmitting}
+          className={`flex items-center bg-gradient-to-r from-kweli-accent to-kweli-primary text-white font-medium py-2.5 px-6 rounded-lg shadow-soft hover:shadow-soft-md transition-all duration-300 transform hover:-translate-y-0.5 ${isSubmitting ? 'opacity-80' : ''}`}
         >
-          {isSubmitting || isSavingToBlockchain ? (
+          {isSubmitting ? (
             <>
               <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              {isSubmitting ? 'Processing...' : 'Saving to Blockchain...'}
+              Processing...
             </>
           ) : (
             <>

@@ -118,7 +118,8 @@ const FingerprintEnrollmentForDataViewer = ({ onScanComplete, onError, nationalI
     }
     setError('');
     try {
-      const sampleFormat = window.Fingerprint.SampleFormat.PngImage;
+      // Use Intermediate format for ISO/ANSI templates to match test_fingerprint_processing.py
+      const sampleFormat = window.Fingerprint.SampleFormat.Intermediate;
       setupEventHandlers();
       await sdkRef.current.startAcquisition(sampleFormat, selectedReader);
       setIsScanning(true);
@@ -147,7 +148,17 @@ const FingerprintEnrollmentForDataViewer = ({ onScanComplete, onError, nationalI
       if (!sampleData.samples) throw new Error('No samples in data');
       samples = typeof sampleData.samples === 'string' ? JSON.parse(sampleData.samples) : sampleData.samples;
       if (!Array.isArray(samples) || samples.length === 0) throw new Error('No valid samples');
-      if (sampleData.sampleFormat === window.Fingerprint.SampleFormat.PngImage && samples.length > 0) {
+      
+      // Check if we're using ISO/ANSI format (Intermediate) or image format
+      if (sampleData.sampleFormat === window.Fingerprint.SampleFormat.Intermediate) {
+        // This is the ISO/ANSI format that matches the test script expectations
+        extractedSample = {
+          template: window.Fingerprint.b64UrlTo64(samples[0].Data),
+          quality: scanQuality || 'Good',
+          format: 'ISO/IEC 19794-2'
+        };
+      } else if (sampleData.sampleFormat === window.Fingerprint.SampleFormat.PngImage && samples.length > 0) {
+        // Image format - convert to base64 string
         extractedSample = samples[0];
       } else {
         throw new Error('Unsupported sample format or empty sample');

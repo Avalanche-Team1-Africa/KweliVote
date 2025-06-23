@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import FingerprintEnrollment from '../voter/FingerprintEnrollment'; // Reuse the voter component
+import BiometricInput from '../shared/BiometricInput'; // Import the shared component
 import biometricToDID from '../../utils/biometricToDID';
 import apiServices from '../../utils/api';
 import blockchainService from '../../services/BlockchainService';
@@ -398,12 +398,17 @@ const KeypersonStep2 = ({ formData, nextStep, prevStep, isObserver, onEnrollment
     }
   }, [fingerprintTemplate, formData.nationalid, onEnrollmentComplete]);
 
-  const handleEnrollmentComplete = (templateData) => {
+  const handleBiometricCaptured = (templateData) => {
     // Process fingerprint templates and generate DID
-    console.log('Biometric enrollment completed, setting template data');
+    console.log('Biometric data captured, setting template data');
     setFingerprintTemplate(templateData);
+    
+    // If there's an onEnrollmentComplete callback, pass the template data
+    if (onEnrollmentComplete) {
+      onEnrollmentComplete(templateData);
+    }
   };
-
+  
   const getStepColorClass = (stepId) => {
     if (!currentStep) return 'bg-gray-200 text-gray-500';
     if (stepId === currentStep) return 'bg-blue-500 text-white';
@@ -527,12 +532,13 @@ const KeypersonStep2 = ({ formData, nextStep, prevStep, isObserver, onEnrollment
             : 'Please use the fingerprint reader to collect biometric data for keyperson registration.'}
         </p>
         
-        {/* Fingerprint reader is now the only option */}
-        <FingerprintEnrollment 
-          nationalId={formData.nationalid} 
-          onEnrollmentComplete={handleEnrollmentComplete}
-          requiredScans={5}
-        />
+        {/* Fingerprint enrollment section */}
+        <div className="mb-6">
+          <BiometricInput 
+            nationalId={formData.nationalid} 
+            onBiometricCaptured={handleBiometricCaptured}
+          />
+        </div>
         
         {/* DID workflow visualization if fingerprint template exists */}
         {fingerprintTemplate && (

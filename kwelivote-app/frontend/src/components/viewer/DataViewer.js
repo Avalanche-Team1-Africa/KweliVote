@@ -140,14 +140,30 @@ const DataViewer = () => {
   // Handler for when enrollment completes (from FingerprintEnrollment)
   const handleEnrollmentComplete = (template) => {
     // Only store the first scan, do not generate DID or process further
-    setFingerprintTemplate(template);
-    setFingerprintError('');
-    // No extra processing or DID generation
+    logFingerprintDebug('Enrollment complete, received template', {
+      hasTemplate: !!template,
+      format: template?.format || 'unknown'
+    });
+    
+    // Ensure the template is in the correct format
+    if (template && template.template && template.format === 'ISO/IEC 19794-2') {
+      setFingerprintTemplate(template);
+      setFingerprintError('');
+      logFingerprintDebug('Valid template stored for verification');
+    } else {
+      logFingerprintDebug('Invalid template format received', template);
+      setFingerprintError('Invalid template format received from scanner');
+    }
   };
 
   // Handler for errors from FingerprintEnrollment
   const handleEnrollmentError = (err) => {
-    setFingerprintError(err?.message || String(err));
+    const errorMessage = err?.message || String(err);
+    logFingerprintDebug('Enrollment error', errorMessage);
+    setFingerprintError(errorMessage);
+    
+    // Clear the template if there was an error
+    setFingerprintTemplate(null);
   };
 
   // Handler for file upload
@@ -200,26 +216,61 @@ const DataViewer = () => {
         throw new Error('National ID not found for voter');
       }
       
-      // Create form data with fingerprint and national ID
-      const formData = new FormData();
-      
-      // Create fingerprints array as expected by the backend
-      const fingerprints = [];
+      logFingerprintDebug('Starting fingerprint verification for', nationalId);
       
       if (fingerprintTemplate) {
         // For template-based verification (from fingerprint reader)
-        const templateStr = JSON.stringify(fingerprintTemplate);
+        logFingerprintDebug('Using template-based verification');
         
-        // Add to fingerprints array as expected by backend
-        fingerprints.push({
-          sample: templateStr,
-          type: 'template'
-        });
-        
-        // Also include template for backward compatibility
-        formData.append('template', templateStr);
+        // Check if we have a template with ISO format
+        if (fingerprintTemplate.template && fingerprintTemplate.format === 'ISO/IEC 19794-2') {
+          // Create payload with the template data in the format expected by the backend
+          const payload = {
+            nationalId: nationalId,
+            fingerprints: [{
+              sample: fingerprintTemplate.template,
+              type: 'template',
+              finger: 'right_index'
+            }],
+            threshold: 40
+          };
+          
+          logFingerprintDebug('Sending template verification request', {
+            nationalId,
+            templateLength: fingerprintTemplate.template.length
+          });
+          
+          // Make API request for template case
+          const response = await fetch(`${API_BASE_URL}/fingerprints/verify-fingerprint/`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${getAuthToken()}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+          });
+          
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || `Failed to verify fingerprint: ${response.status}`);
+          }
+          
+          const result = await response.json();
+          logFingerprintDebug('Fingerprint verification result', result);
+          
+          if (!result.match_success) {
+            throw new Error('Fingerprint verification failed: No match found');
+          }
+          
+          return result;
+        } else {
+          // Legacy format or invalid template
+          throw new Error('Invalid template format. Expected ISO/IEC 19794-2 format.');
+        }
       } else if (fingerprintImage) {
         // For image-based verification (from file upload)
+        logFingerprintDebug('Using image-based verification');
+        
         return new Promise((resolve, reject) => {
           const reader = new FileReader();
           
@@ -227,24 +278,22 @@ const DataViewer = () => {
             try {
               const base64String = reader.result;
               
-              // Add to fingerprints array as expected by backend
-              fingerprints.push({
-                sample: base64String,
-                type: 'image'
-              });
-              
-              // Add fingerprint for backward compatibility
+              // Create a FormData object for file upload - this works better with image data
+              const formData = new FormData();
+              formData.append('nationalId', nationalId);
               formData.append('fingerprint', fingerprintImage);
               
-              // Add fingerprints array and national ID
-              formData.append('fingerprints', JSON.stringify(fingerprints));
-              formData.append('nationalId', nationalId);
+              logFingerprintDebug('Sending image verification request', {
+                nationalId,
+                imageSize: fingerprintImage.size
+              });
               
-              // Make API request
+              // Make API request with FormData for image processing
               const response = await fetch(`${API_BASE_URL}/fingerprints/verify-fingerprint/`, {
                 method: 'POST',
                 headers: {
                   'Authorization': `Bearer ${getAuthToken()}`
+                  // Don't set Content-Type here, it will be set automatically with the boundary
                 },
                 body: formData
               });
@@ -275,32 +324,7 @@ const DataViewer = () => {
         });
       }
       
-      // For template case, add fingerprints array and continue with API call
-      formData.append('fingerprints', JSON.stringify(fingerprints));
-      formData.append('nationalId', nationalId);
-      
-      // Make API request for template case
-      const response = await fetch(`${API_BASE_URL}/fingerprints/verify-fingerprint/`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${getAuthToken()}`
-        },
-        body: formData
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Failed to verify fingerprint: ${response.status}`);
-      }
-      
-      const result = await response.json();
-      logFingerprintDebug('Fingerprint verification result', result);
-      
-      if (!result.match_success) {
-        throw new Error('Fingerprint verification failed: No match found');
-      }
-      
-      return result;
+      throw new Error('No valid fingerprint data available for verification');
     } catch (error) {
       console.error('Error verifying fingerprint:', error);
       throw error;
@@ -354,7 +378,9 @@ const DataViewer = () => {
         did_match: didMatch,
         validation_complete: fingerprintResult.match_success && didMatch,
         local_did: localDID,
-        blockchain_did: blockchainResult.did
+        blockchain_did: blockchainResult.did,
+        match_score: fingerprintResult.match_score || 0,
+        extracted_template: fingerprintResult.extracted_template || null
       });
       
       if (!didMatch) {
