@@ -8,6 +8,10 @@ import { getAuthToken } from '../../utils/auth';
 const logFingerprintDebug = (message, data = null) => {
   if (process.env.NODE_ENV === 'development') {
     console.log(`[FP-DEBUG] ${message}`, data || '');
+    
+    // Log to browser console with timestamp for easier debugging
+    const timestamp = new Date().toISOString();
+    console.log(`[FP-DEBUG][${timestamp}] ${message}`, data || '');
   }
 };
 
@@ -170,11 +174,20 @@ const DataViewer = () => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       
-      // Validate file type
-      const acceptedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+      // Validate file type - expanded to include more image types that might be used in testing
+      const acceptedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/bmp', 'image/tiff'];
+      
+      // Check if the file has an accepted MIME type
       if (!acceptedTypes.includes(file.type)) {
-        setFingerprintError('Please upload a valid image file (JPEG, PNG, or GIF)');
-        return;
+        // If MIME type check fails, try checking the file extension as a fallback
+        const fileName = file.name.toLowerCase();
+        const validExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.tif'];
+        const hasValidExtension = validExtensions.some(ext => fileName.endsWith(ext));
+        
+        if (!hasValidExtension) {
+          setFingerprintError('Please upload a valid fingerprint image file (JPEG, PNG, GIF, BMP, or TIFF)');
+          return;
+        }
       }
       
       // Validate file size (max 10MB)
@@ -183,6 +196,12 @@ const DataViewer = () => {
         setFingerprintError('File size exceeds 10MB. Please upload a smaller file');
         return;
       }
+      
+      logFingerprintDebug('Fingerprint image uploaded successfully', {
+        fileName: file.name,
+        fileSize: `${(file.size / 1024).toFixed(2)} KB`,
+        fileType: file.type
+      });
       
       setFingerprintImage(file);
       setFingerprintError(''); // Clear any previous errors
@@ -197,7 +216,7 @@ const DataViewer = () => {
     setFingerprintError('');
   };
   
-  // Verify fingerprint with backend API
+  // Verify fingerprint with backend API using two-step process similar to test_fingerprint_self_matching.py
   const verifyFingerprintWithBackend = async () => {
     if (!validatingVoter) {
       throw new Error('No voter data available for validation');
@@ -221,60 +240,33 @@ const DataViewer = () => {
       
       logFingerprintDebug('Starting fingerprint verification for', nationalId);
       
+      // Similar to test_fingerprint_self_matching.py, we'll implement a two-step process:
+      // 1. First enroll/extract the fingerprint to get a template
+      // 2. Then verify the fingerprint against the template
+      
+      let fpData = null;
+      let extractionResult = null;
+      
       if (fingerprintTemplate) {
         // For template-based verification (from fingerprint reader)
         logFingerprintDebug('Using template-based verification');
         
         // Check if we have a template with ISO format
         if (fingerprintTemplate.template && fingerprintTemplate.format === 'ISO/IEC 19794-2') {
-          // Create payload with the template data in the format expected by the backend
-          // Following the format used in test_fingerprint_processing.py
-          const payload = {
-            nationalId: nationalId,
-            fingerprints: [{
-              sample: fingerprintTemplate.template,
-              type: 'template',
-              finger: 'Scan 1'
-            }],
-            threshold: 40
+          fpData = fingerprintTemplate.template;
+          
+          // For templates, we can skip the extraction step if we already have ISO format
+          extractionResult = {
+            iso_template_base64: fpData,
+            metadata: {
+              template_hash: fingerprintTemplate.hash || 'unknown',
+              format: 'ISO/IEC 19794-2'
+            }
           };
           
-          logFingerprintDebug('Sending template verification request', {
-            nationalId,
-            templateLength: fingerprintTemplate.template.length,
-            endpoint: apiEndpoint
+          logFingerprintDebug('Using existing ISO template for verification', {
+            templateLength: fpData.length
           });
-          
-          // Make API request for template case
-          const response = await fetch(apiEndpoint, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${getAuthToken()}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-          });
-          
-          if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || `Failed to verify fingerprint: ${response.status}`);
-          }
-          
-          const result = await response.json();
-          logFingerprintDebug('Fingerprint verification result', result);
-          
-          // Calculate template hash for comparison if template is returned
-          if (result.extracted_template && result.extracted_template.iso_template_base64) {
-            logFingerprintDebug('Received ISO template from API, verifying consistency', {
-              templateSize: result.extracted_template.iso_template_base64.length
-            });
-          }
-          
-          if (!result.match_success) {
-            throw new Error('Fingerprint verification failed: No match found');
-          }
-          
-          return result;
         } else {
           // Legacy format or invalid template
           throw new Error('Invalid template format. Expected ISO/IEC 19794-2 format.');
@@ -283,82 +275,113 @@ const DataViewer = () => {
         // For image-based verification (from file upload)
         logFingerprintDebug('Using image-based verification');
         
-        return new Promise((resolve, reject) => {
+        // Read the image file as base64
+        fpData = await new Promise((resolve, reject) => {
           const reader = new FileReader();
           
-          reader.onloadend = async () => {
-            try {
-              const base64String = reader.result;
-              
-              // Use the same payload format as in test_fingerprint_processing.py
-              const payload = {
-                fingerprints: [
-                  {
-                    finger: "Scan 1",
-                    sample: base64String
-                  }
-                ],
-                nationalId: nationalId,
-                extract_only: true,
-                threshold: 40
-              };
-              
-              logFingerprintDebug('Sending image verification request', {
-                nationalId,
-                endpoint: apiEndpoint,
-                payloadStructure: {
-                  fingerprints: '1 item array with finger and sample',
-                  nationalId: nationalId,
-                  extract_only: true,
-                  threshold: 40
-                }
-              });
-              
-              // Make API request with JSON payload for image processing
-              const response = await fetch(apiEndpoint, {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${getAuthToken()}`,
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(payload)
-              });
-              
-              if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || `Failed to verify fingerprint: ${response.status}`);
-              }
-              
-              const result = await response.json();
-              logFingerprintDebug('Fingerprint verification result', result);
-              
-              // Check if we have a valid template in the response and log details
-              if (result.extracted_template && result.extracted_template.iso_template_base64) {
-                logFingerprintDebug('Received ISO template from API', {
-                  templateSize: result.extracted_template.iso_template_base64.length,
-                  hasXytData: !!result.extracted_template.xyt_data
-                });
-              }
-              
-              if (!result.match_success) {
-                throw new Error('Fingerprint verification failed: No match found');
-              }
-              
-              resolve(result);
-            } catch (error) {
-              reject(error);
-            }
-          };
-          
-          reader.onerror = () => {
-            reject(new Error('Failed to read fingerprint image'));
-          };
+          reader.onloadend = () => resolve(reader.result);
+          reader.onerror = () => reject(new Error('Failed to read fingerprint image'));
           
           reader.readAsDataURL(fingerprintImage);
         });
+        
+        // Step 1: Extract template from the fingerprint image
+        logFingerprintDebug('Extracting template from fingerprint image');
+        
+        const extractionPayload = {
+          nationalId: nationalId,
+          fingerprints: [{
+            sample: fpData,
+            finger: 'Scan 1'
+          }],
+          extract_only: true
+        };
+        
+        const extractionResponse = await fetch(apiEndpoint, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${getAuthToken()}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(extractionPayload)
+        });
+        
+        if (!extractionResponse.ok) {
+          const errorData = await extractionResponse.json();
+          throw new Error(errorData.error || `Failed to extract fingerprint template: ${extractionResponse.status}`);
+        }
+        
+        const extractionData = await extractionResponse.json();
+        
+        if (!extractionData.extracted_template || !extractionData.extracted_template.iso_template_base64) {
+          throw new Error('Failed to extract valid template from fingerprint image');
+        }
+        
+        extractionResult = extractionData.extracted_template;
+        
+        logFingerprintDebug('Successfully extracted template', {
+          templateSize: extractionResult.iso_template_base64.length,
+          hasXytData: !!extractionResult.xyt_data,
+          templateHash: extractionResult.metadata?.template_hash || 'unknown'
+        });
       }
       
-      throw new Error('No valid fingerprint data available for verification');
+      if (!extractionResult || !extractionResult.iso_template_base64) {
+        throw new Error('No valid fingerprint template available for verification');
+      }
+      
+      // Step 2: Verify fingerprint against the extracted template
+      logFingerprintDebug('Verifying fingerprint against extracted template');
+      
+      const verificationPayload = {
+        nationalId: nationalId,
+        fingerprints: [{
+          sample: fpData,
+          finger: 'Scan 1'
+        }],
+        template: extractionResult.iso_template_base64,
+        threshold: 40,
+        extract_only: false
+      };
+      
+      const verificationResponse = await fetch(apiEndpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${getAuthToken()}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(verificationPayload)
+      });
+      
+      if (!verificationResponse.ok) {
+        const errorData = await verificationResponse.json();
+        throw new Error(errorData.error || `Failed to verify fingerprint: ${verificationResponse.status}`);
+      }
+      
+      const verificationResult = await verificationResponse.json();
+      
+      // Check if we have a match
+      const matchScore = verificationResult.match_score || 0;
+      const isMatch = verificationResult.is_match || false;
+      
+      logFingerprintDebug('Fingerprint verification result', {
+        matchScore,
+        isMatch,
+        nationalId
+      });
+      
+      if (!isMatch) {
+        throw new Error(`Fingerprint verification failed: No match found (score: ${matchScore})`);
+      }
+      
+      // Return the combined result with both extraction and verification data
+      return {
+        ...verificationResult,
+        match_success: isMatch,
+        match_score: matchScore,
+        extracted_template: extractionResult,
+        template_verified: true
+      };
     } catch (error) {
       console.error('Error verifying fingerprint:', error);
       throw error;
@@ -380,11 +403,11 @@ const DataViewer = () => {
         throw new Error('National ID not found for voter');
       }
       
-      // Step 1: Verify fingerprint against backend
+      // Step 1: Verify fingerprint against backend using the two-step process
       logFingerprintDebug('Starting fingerprint verification against backend');
       const fingerprintResult = await verifyFingerprintWithBackend();
       
-      if (!fingerprintResult.match_success) {
+      if (!fingerprintResult.match_success && !fingerprintResult.is_match) {
         throw new Error('Fingerprint verification failed: No match found');
       }
       
@@ -401,7 +424,8 @@ const DataViewer = () => {
         localDID = validatingVoter.did;
         logFingerprintDebug('Using voter DID with extracted template confirmation', { 
           did: localDID,
-          hasExtractedTemplate: !!fingerprintResult.extracted_template
+          hasExtractedTemplate: !!fingerprintResult.extracted_template,
+          templateHash: fingerprintResult.extracted_template?.metadata?.template_hash || 'unknown'
         });
       } else if (validatingVoter.did) {
         // Fallback to voter's DID if no template is returned
@@ -427,9 +451,9 @@ const DataViewer = () => {
       // Set the combined validation result
       setValidationResult({
         ...blockchainResult,
-        fingerprint_verified: fingerprintResult.match_success,
+        fingerprint_verified: fingerprintResult.is_match || fingerprintResult.match_success,
         did_match: didMatch,
-        validation_complete: fingerprintResult.match_success && didMatch,
+        validation_complete: (fingerprintResult.is_match || fingerprintResult.match_success) && didMatch,
         local_did: localDID,
         blockchain_did: blockchainResult.did,
         match_score: fingerprintResult.match_score || 0,
