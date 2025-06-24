@@ -3,7 +3,6 @@ import { voterAPI, keypersonAPI } from '../../utils/api';
 import blockchainService from '../../services/BlockchainService';
 import FingerprintEnrollmentForDataViewer from './FingerprintEnrollmentForDataViewer';
 import { getAuthToken } from '../../utils/auth';
-import { API_BASE_URL } from '../../utils/api';
 
 // Debug logger for fingerprint operations - helps with troubleshooting
 const logFingerprintDebug = (message, data = null) => {
@@ -216,6 +215,10 @@ const DataViewer = () => {
         throw new Error('National ID not found for voter');
       }
       
+      // Use environment variable for API base URL
+      const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:8000';
+      const apiEndpoint = `${apiBaseUrl}/api/fingerprints/verify-fingerprint/`;
+      
       logFingerprintDebug('Starting fingerprint verification for', nationalId);
       
       if (fingerprintTemplate) {
@@ -225,23 +228,25 @@ const DataViewer = () => {
         // Check if we have a template with ISO format
         if (fingerprintTemplate.template && fingerprintTemplate.format === 'ISO/IEC 19794-2') {
           // Create payload with the template data in the format expected by the backend
+          // Following the format used in test_fingerprint_processing.py
           const payload = {
             nationalId: nationalId,
             fingerprints: [{
               sample: fingerprintTemplate.template,
               type: 'template',
-              finger: 'right_index'
+              finger: 'Scan 1'
             }],
             threshold: 40
           };
           
           logFingerprintDebug('Sending template verification request', {
             nationalId,
-            templateLength: fingerprintTemplate.template.length
+            templateLength: fingerprintTemplate.template.length,
+            endpoint: apiEndpoint
           });
           
           // Make API request for template case
-          const response = await fetch(`${API_BASE_URL}/fingerprints/verify-fingerprint/`, {
+          const response = await fetch(apiEndpoint, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${getAuthToken()}`,
@@ -257,6 +262,13 @@ const DataViewer = () => {
           
           const result = await response.json();
           logFingerprintDebug('Fingerprint verification result', result);
+          
+          // Calculate template hash for comparison if template is returned
+          if (result.extracted_template && result.extracted_template.iso_template_base64) {
+            logFingerprintDebug('Received ISO template from API, verifying consistency', {
+              templateSize: result.extracted_template.iso_template_base64.length
+            });
+          }
           
           if (!result.match_success) {
             throw new Error('Fingerprint verification failed: No match found');
@@ -278,24 +290,38 @@ const DataViewer = () => {
             try {
               const base64String = reader.result;
               
-              // Create a FormData object for file upload - this works better with image data
-              const formData = new FormData();
-              formData.append('nationalId', nationalId);
-              formData.append('fingerprint', fingerprintImage);
+              // Use the same payload format as in test_fingerprint_processing.py
+              const payload = {
+                fingerprints: [
+                  {
+                    finger: "Scan 1",
+                    sample: base64String
+                  }
+                ],
+                nationalId: nationalId,
+                extract_only: true,
+                threshold: 40
+              };
               
               logFingerprintDebug('Sending image verification request', {
                 nationalId,
-                imageSize: fingerprintImage.size
+                endpoint: apiEndpoint,
+                payloadStructure: {
+                  fingerprints: '1 item array with finger and sample',
+                  nationalId: nationalId,
+                  extract_only: true,
+                  threshold: 40
+                }
               });
               
-              // Make API request with FormData for image processing
-              const response = await fetch(`${API_BASE_URL}/fingerprints/verify-fingerprint/`, {
+              // Make API request with JSON payload for image processing
+              const response = await fetch(apiEndpoint, {
                 method: 'POST',
                 headers: {
-                  'Authorization': `Bearer ${getAuthToken()}`
-                  // Don't set Content-Type here, it will be set automatically with the boundary
+                  'Authorization': `Bearer ${getAuthToken()}`,
+                  'Content-Type': 'application/json'
                 },
-                body: formData
+                body: JSON.stringify(payload)
               });
               
               if (!response.ok) {
@@ -305,6 +331,14 @@ const DataViewer = () => {
               
               const result = await response.json();
               logFingerprintDebug('Fingerprint verification result', result);
+              
+              // Check if we have a valid template in the response and log details
+              if (result.extracted_template && result.extracted_template.iso_template_base64) {
+                logFingerprintDebug('Received ISO template from API', {
+                  templateSize: result.extracted_template.iso_template_base64.length,
+                  hasXytData: !!result.extracted_template.xyt_data
+                });
+              }
               
               if (!result.match_success) {
                 throw new Error('Fingerprint verification failed: No match found');
@@ -355,7 +389,26 @@ const DataViewer = () => {
       }
       
       // Step 2: Get local DID from the verified fingerprint
-      const localDID = fingerprintResult.did || validatingVoter.did;
+      // Extract template data from verification response if available
+      let localDID = null;
+      
+      if (fingerprintResult.did) {
+        // If DID is directly returned by the API
+        localDID = fingerprintResult.did;
+        logFingerprintDebug('Using DID directly from API response', { did: localDID });
+      } else if (fingerprintResult.extracted_template && validatingVoter.did) {
+        // If we have an extracted template and voter already has a DID
+        localDID = validatingVoter.did;
+        logFingerprintDebug('Using voter DID with extracted template confirmation', { 
+          did: localDID,
+          hasExtractedTemplate: !!fingerprintResult.extracted_template
+        });
+      } else if (validatingVoter.did) {
+        // Fallback to voter's DID if no template is returned
+        localDID = validatingVoter.did;
+        logFingerprintDebug('Using voter DID as fallback', { did: localDID });
+      }
+      
       if (!localDID) {
         throw new Error('No DID available for verification');
       }
@@ -380,7 +433,8 @@ const DataViewer = () => {
         local_did: localDID,
         blockchain_did: blockchainResult.did,
         match_score: fingerprintResult.match_score || 0,
-        extracted_template: fingerprintResult.extracted_template || null
+        extracted_template: fingerprintResult.extracted_template || null,
+        template_verified: !!fingerprintResult.extracted_template
       });
       
       if (!didMatch) {

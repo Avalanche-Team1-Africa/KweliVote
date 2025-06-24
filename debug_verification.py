@@ -5,13 +5,19 @@ import json
 import base64
 import requests
 import logging
+import os
+import sys
+
+# Add the backend directory to the path so we can import the iso_fingerprint_template_app
+sys.path.append(os.path.join(os.path.dirname(__file__), 'kwelivote-app/backend'))
+
 from iso_fingerprint_template_app.fingerprint_processor import FingerprintProcessor
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 
 # Test data
-auth_creds = {'username': 'john_0001', 'password': 'KV2025_xV3cfqgQlV'}
+auth_creds = {'username': 'john_0001', 'password': 'eCb*Y3cuXZph'}
 api_base = 'http://127.0.0.1:8000/api'
 
 def debug_verification():

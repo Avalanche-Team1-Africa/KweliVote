@@ -117,20 +117,20 @@ git push origin --tags
 
 ```
 # Create a hotfix branch from main
-git checkout -b hotfix/bug-description main
+git checkout -b hotfix/fingerprint-verification-fix main
 
 # Fix the bug, commit changes
-git add .
-git commit -m "Fix critical bug XYZ"
+git add kwelivote-app/frontend/src/components/viewer/DataViewer.js
+git commit -m "Fix fingerprint verification API integration"
 
 # Merge back to main
 git checkout main
-git merge hotfix/bug-description
+git merge hotfix/fingerprint-verification-fix
 git push origin main
 
 # Also apply the fix to dev
 git checkout dev
-git merge hotfix/bug-description
+git merge hotfix/fingerprint-verification-fix
 git push origin dev
 ```
 
@@ -153,13 +153,19 @@ git push --force origin main
 
 ```
 # Discard uncommitted changes
-git restore <file>
+git restore kwelivote-app/frontend/src/components/viewer/DataViewer.js
 
 # Undo last commit but keep changes staged
 git reset --soft HEAD~1
 
 # Undo last commit and discard changes
 git reset --hard HEAD~1
+
+# Revert a specific commit without modifying history
+git revert a1b2c3d4
+
+# Remove a file from the staging area but keep the local changes
+git restore --staged debug_verification.py
 ```
 
 ## Best Practices
@@ -174,6 +180,49 @@ git reset --hard HEAD~1
    git push origin --delete feature/your-feature-name
    ```
 6. **Use tags for releases** on the main branch
+
+## Recovering Deleted Files
+
+### Finding and Restoring Deleted Files
+
+```bash
+# Find when a file was deleted (search all branches)
+git log --all --full-history -- debug_verification.py
+
+# Find deleted files with a specific name pattern
+git log --all --full-history -- "*debug_*.py"
+
+# Restore a specific version of a deleted file
+git checkout <commit-hash>^ -- debug_verification.py
+
+# Find files that match a pattern in the entire git history
+git rev-list --all | xargs git grep "fingerprint"
+
+# Restore a file from the last commit where it existed
+git checkout $(git rev-list -n 1 HEAD -- debug_verification.py)^ -- debug_verification.py
+
+# Look for a file in all branches
+git log --all --name-status | grep debug_verification.py
+```
+
+### Using Git Reflog to Recover Recent Changes
+
+```bash
+# Show reflog (history of all git operations)
+git reflog
+
+# Recover a branch that was deleted
+git checkout -b recovered-debug-branch <commit-hash>
+
+# Restore the state of your repository to a specific reflog entry
+git reset --hard HEAD@{X}  # where X is the reflog index number
+
+# Example: Restore debug_verification.py using reflog
+git checkout HEAD@{1} -- debug_verification.py
+
+# Find multiple files and restore them to their state at a specific commit
+git checkout <commit-hash> -- debug_matching.py debug_verification.py areasOfAttention.md
+```
 
 ## Visual Workflow Diagram
 

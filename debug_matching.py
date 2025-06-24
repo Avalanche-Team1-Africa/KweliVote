@@ -10,7 +10,12 @@ import time
 import numpy as np
 from datetime import timedelta
 import logging
+import sys
 from contextlib import contextmanager
+
+# Add the backend directory to the path so we can import the iso_fingerprint_template_app
+sys.path.append(os.path.join(os.path.dirname(__file__), 'kwelivote-app/backend'))
+
 from iso_fingerprint_template_app.fingerprint_processor import (
     FingerprintProcessor,
     IMAGE_WIDTH,

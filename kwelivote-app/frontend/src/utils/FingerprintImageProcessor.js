@@ -1,4 +1,4 @@
-// No imports needed as we're using hardcoded URL
+// Import environment variables
 
 /**
  * Process an uploaded fingerprint image and convert it to a template
@@ -48,8 +48,11 @@ const processUploadedFingerprintImage = async (imageData, nationalId) => {
     };
     
     // Log details about the request (without the actual image data for privacy)
+    const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:8000';
+    const apiEndpoint = `${apiBaseUrl}/api/fingerprints/verify-fingerprint/`;
+    
     console.log('Sending image to verify-fingerprint API:', {
-      endpoint: `http://127.0.0.1:8000/api/fingerprints/verify-fingerprint/`,
+      endpoint: apiEndpoint,
       method: 'POST',
       payloadStructure: {
         fingerprints: '1 item array with finger and sample',
@@ -64,7 +67,7 @@ const processUploadedFingerprintImage = async (imageData, nationalId) => {
     const token = userInfo.token;
     
     // Send the JSON payload to the verify-fingerprint endpoint
-    const response = await fetch(`http://127.0.0.1:8000/api/fingerprints/verify-fingerprint/`, {
+    const response = await fetch(apiEndpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

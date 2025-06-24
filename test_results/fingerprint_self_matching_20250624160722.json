@@ -1,0 +1,106 @@
+{
+  "timestamp": "2025-06-24T16:06:37.910876",
+  "tests": [
+    {
+      "file": "fingerprint(1).png",
+      "national_id": "TEST-SELFMATCH-fingerprint(1)",
+      "start_time": "2025-06-24T16:06:38.762616",
+      "steps": [
+        {
+          "step": "load_fingerprint",
+          "status": "success"
+        },
+        {
+          "step": "enroll_fingerprint",
+          "status": "success",
+          "template_hash": "c80ce55152e9293efba3dc0451930118bb93317b503feecfabfd05bdbbcd249f"
+        },
+        {
+          "step": "verify_fingerprint",
+          "status": "success",
+          "match_score": 426,
+          "is_match": true
+        }
+      ],
+      "success": true,
+      "end_time": "2025-06-24T16:06:40.015694"
+    },
+    {
+      "file": "fingerprint(3).png",
+      "national_id": "TEST-SELFMATCH-fingerprint(3)",
+      "start_time": "2025-06-24T16:06:40.015891",
+      "steps": [
+        {
+          "step": "load_fingerprint",
+          "status": "success"
+        },
+        {
+          "step": "enroll_fingerprint",
+          "status": "success",
+          "template_hash": "81c9e9074dd929e5b686984af56068170825cf20fe6339b1a6fc2d9f68debd83"
+        },
+        {
+          "step": "verify_fingerprint",
+          "status": "success",
+          "match_score": 310,
+          "is_match": true
+        }
+      ],
+      "success": true,
+      "end_time": "2025-06-24T16:07:19.463579"
+    },
+    {
+      "file": "fingerprint(0).png",
+      "national_id": "TEST-SELFMATCH-fingerprint(0)",
+      "start_time": "2025-06-24T16:07:19.463819",
+      "steps": [
+        {
+          "step": "load_fingerprint",
+          "status": "success"
+        },
+        {
+          "step": "enroll_fingerprint",
+          "status": "success",
+          "template_hash": "c80ce55152e9293efba3dc0451930118bb93317b503feecfabfd05bdbbcd249f"
+        },
+        {
+          "step": "verify_fingerprint",
+          "status": "success",
+          "match_score": 426,
+          "is_match": true
+        }
+      ],
+      "success": true,
+      "end_time": "2025-06-24T16:07:20.526870"
+    },
+    {
+      "file": "fingerprint(2).png",
+      "national_id": "TEST-SELFMATCH-fingerprint(2)",
+      "start_time": "2025-06-24T16:07:20.527318",
+      "steps": [
+        {
+          "step": "load_fingerprint",
+          "status": "success"
+        },
+        {
+          "step": "enroll_fingerprint",
+          "status": "success",
+          "template_hash": "bbfb17692377d7133bc8b0f8519ea3c4873fe6febc20d5ec1d9b924db2988d2b"
+        },
+        {
+          "step": "verify_fingerprint",
+          "status": "success",
+          "match_score": 450,
+          "is_match": true
+        }
+      ],
+      "success": true,
+      "end_time": "2025-06-24T16:07:22.068497"
+    }
+  ],
+  "summary": {
+    "total": 4,
+    "successful": 4,
+    "failed": 0
+  }
+}

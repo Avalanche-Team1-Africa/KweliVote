@@ -1,7 +1,7 @@
 import { getAuthToken, setAuthToken, removeAuthToken } from './auth';
 
-// API Base URL - should match with your Django backend
-const API_BASE_URL = 'http://127.0.0.1:8000/api';
+// API Base URL - use environment variable or fallback to default
+const API_BASE_URL = `${process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:8000'}/api`;
 
 // Export the API_BASE_URL for other services to use
 export { API_BASE_URL };
